@@ -11,6 +11,10 @@
   },
   "dependencies": {
     "konva": "^9.3.13",
-    "nuxt": "^3.12.4"
+    "nuxt": "^3.12.4",
+    "pinia": "^2.1.7"
+  },
+  "devDependencies": {
+    "@pinia/nuxt": "^0.5.1"
   }
 }

@@ -57,3 +57,13 @@
     </footer>
   </div>
 </template>
+
+<script setup lang="ts">
+import { computed } from 'vue'
+import { useSchemaStore } from '~/stores/schema'
+
+const schemaStore = useSchemaStore()
+
+const components = computed(() => schemaStore.schema.components)
+const cables = computed(() => schemaStore.schema.cables)
+</script>
