@@ -168,6 +168,13 @@ body {
   overflow: hidden;
 }
 
+.canvas-fallback {
+  display: grid;
+  place-items: center;
+  color: #6a635c;
+  font-size: 0.9rem;
+}
+
 .field {
   display: grid;
   gap: 6px;
@@ -183,6 +190,18 @@ body {
   border-radius: 10px;
   padding: 8px 10px;
   background: #fff;
+}
+
+.field select {
+  border: 1px solid rgba(45, 42, 37, 0.15);
+  border-radius: 10px;
+  padding: 8px 10px;
+  background: #fff;
+}
+
+.empty-state {
+  color: #6a635c;
+  font-size: 0.9rem;
 }
 
 .issue {

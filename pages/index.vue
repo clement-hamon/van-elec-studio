@@ -33,7 +33,12 @@
         </button>
         <button class="btn btn-ghost" type="button" disabled>Group</button>
       </div>
-      <CanvasStage :mode="mode" />
+      <ClientOnly>
+        <CanvasStage :mode="mode" />
+        <template #fallback>
+          <div class="canvas-stage canvas-fallback">Loading canvas...</div>
+        </template>
+      </ClientOnly>
     </section>
 
     <aside class="panel panel-right">
@@ -42,18 +47,50 @@
         <p>Set properties for the selected item.</p>
       </div>
       <div class="panel-body">
-        <div class="field">
-          <label for="voltage">Voltage</label>
-          <input id="voltage" type="number" placeholder="12" >
+        <div v-if="!selectedComponent && !selectedCable" class="empty-state">
+          Select a component or cable to edit its properties.
         </div>
-        <div class="field">
-          <label for="current">Current</label>
-          <input id="current" type="number" placeholder="30" >
-        </div>
-        <div class="field">
-          <label for="length">Cable Length (m)</label>
-          <input id="length" type="number" placeholder="4" >
-        </div>
+
+        <template v-if="selectedComponent">
+          <div class="field">
+            <label for="component-name">Name</label>
+            <input id="component-name" v-model="componentName" type="text" >
+          </div>
+          <div v-if="componentVoltage !== null" class="field">
+            <label for="voltage">Voltage (V)</label>
+            <input id="voltage" v-model.number="componentVoltage" type="number" step="0.1" >
+          </div>
+          <div v-if="componentCapacity !== null" class="field">
+            <label for="capacity">Capacity (Ah)</label>
+            <input id="capacity" v-model.number="componentCapacity" type="number" step="1" >
+          </div>
+          <div v-if="componentRating !== null" class="field">
+            <label for="rating">Rating (A)</label>
+            <input id="rating" v-model.number="componentRating" type="number" step="1" >
+          </div>
+        </template>
+
+        <template v-if="selectedCable">
+          <div class="field">
+            <label for="cable-name">Cable Name</label>
+            <input id="cable-name" v-model="cableName" type="text" >
+          </div>
+          <div class="field">
+            <label for="length">Cable Length (m)</label>
+            <input id="length" v-model.number="cableLength" type="number" step="0.1" >
+          </div>
+          <div class="field">
+            <label for="gauge">Gauge (AWG)</label>
+            <input id="gauge" v-model.number="cableGauge" type="number" step="1" >
+          </div>
+          <div class="field">
+            <label for="material">Material</label>
+            <select id="material" v-model="cableMaterial">
+              <option value="copper">Copper</option>
+              <option value="aluminum">Aluminum</option>
+            </select>
+          </div>
+        </template>
       </div>
     </aside>
 
@@ -85,9 +122,98 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { useSchemaStore } from '~/stores/schema'
+import CanvasStage from '~/components/CanvasStage.client.vue'
 
 const schemaStore = useSchemaStore()
 
 const issues = computed(() => schemaStore.issues)
 const mode = ref<'select' | 'connect'>('select')
+
+const selectedComponent = computed(() => schemaStore.selectedComponent)
+const selectedCable = computed(() => schemaStore.selectedCable)
+
+const componentName = computed({
+  get: () => selectedComponent.value?.name ?? '',
+  set: (value: string) => {
+    if (!selectedComponent.value) return
+    schemaStore.updateComponent(selectedComponent.value.id, { name: value })
+  },
+})
+
+const componentVoltage = computed({
+  get: () => {
+    const voltage = selectedComponent.value?.props.voltage
+    return typeof voltage === 'number' ? voltage : null
+  },
+  set: (value: number | null) => {
+    if (!selectedComponent.value || value === null) return
+    schemaStore.updateComponent(selectedComponent.value.id, {
+      props: { ...selectedComponent.value.props, voltage: value },
+    })
+  },
+})
+
+const componentCapacity = computed({
+  get: () => {
+    const capacity = selectedComponent.value?.props.capacityAh
+    return typeof capacity === 'number' ? capacity : null
+  },
+  set: (value: number | null) => {
+    if (!selectedComponent.value || value === null) return
+    schemaStore.updateComponent(selectedComponent.value.id, {
+      props: { ...selectedComponent.value.props, capacityAh: value },
+    })
+  },
+})
+
+const componentRating = computed({
+  get: () => {
+    const rating = selectedComponent.value?.props.ratingA
+    return typeof rating === 'number' ? rating : null
+  },
+  set: (value: number | null) => {
+    if (!selectedComponent.value || value === null) return
+    schemaStore.updateComponent(selectedComponent.value.id, {
+      props: { ...selectedComponent.value.props, ratingA: value },
+    })
+  },
+})
+
+const cableName = computed({
+  get: () => selectedCable.value?.name ?? '',
+  set: (value: string) => {
+    if (!selectedCable.value) return
+    schemaStore.updateCable(selectedCable.value.id, { name: value })
+  },
+})
+
+const cableLength = computed({
+  get: () => selectedCable.value?.props.lengthM ?? 0,
+  set: (value: number) => {
+    if (!selectedCable.value) return
+    schemaStore.updateCable(selectedCable.value.id, {
+      props: { ...selectedCable.value.props, lengthM: value },
+    })
+  },
+})
+
+const cableGauge = computed({
+  get: () => selectedCable.value?.props.gaugeAwg ?? 0,
+  set: (value: number) => {
+    if (!selectedCable.value) return
+    schemaStore.updateCable(selectedCable.value.id, {
+      props: { ...selectedCable.value.props, gaugeAwg: value },
+    })
+  },
+})
+
+const cableMaterial = computed({
+  get: () => selectedCable.value?.props.material ?? 'copper',
+  set: (value: 'copper' | 'aluminum') => {
+    if (!selectedCable.value) return
+    schemaStore.updateCable(selectedCable.value.id, {
+      props: { ...selectedCable.value.props, material: value },
+    })
+  },
+})
 </script>
