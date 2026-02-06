@@ -7,8 +7,15 @@ import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import Konva from 'konva'
 import { useSchemaStore } from '~/stores/schema'
 
+type Mode = 'select' | 'connect'
+
+const props = defineProps<{
+  mode: Mode
+}>()
+
 const container = ref<HTMLDivElement | null>(null)
 const schemaStore = useSchemaStore()
+const pendingSourceId = ref<string | null>(null)
 
 let stage: Konva.Stage | null = null
 let layer: Konva.Layer | null = null
@@ -44,13 +51,15 @@ const syncCableLines = () => {
 const applySelection = () => {
   const selectedComponentId = schemaStore.schema.selection.componentId
   const selectedCableId = schemaStore.schema.selection.cableId
+  const pendingId = pendingSourceId.value
 
   nodeMap.forEach((node, nodeId) => {
     const rect = node.findOne<Konva.Rect>('.node-rect')
     if (!rect) return
     const isSelected = nodeId === selectedComponentId
-    rect.stroke(isSelected ? '#d96b3a' : '#2d2a25')
-    rect.shadowOpacity(isSelected ? 0.3 : 0.15)
+    const isPending = nodeId === pendingId
+    rect.stroke(isPending ? '#4c7d6b' : isSelected ? '#d96b3a' : '#2d2a25')
+    rect.shadowOpacity(isSelected || isPending ? 0.3 : 0.15)
   })
 
   lineMap.forEach((line, cableId) => {
@@ -96,11 +105,44 @@ const ensureNode = (componentId: string) => {
   group.add(rect)
   group.add(title)
 
-  group.on('click tap', (event) => {
-    event.cancelBubble = true
+  const handleNodeClick = () => {
+    if (props.mode === 'connect') {
+      if (!pendingSourceId.value) {
+        pendingSourceId.value = componentId
+        schemaStore.setSelection({ componentId })
+        applySelection()
+        layer?.batchDraw()
+        return
+      }
+
+      if (pendingSourceId.value === componentId) {
+        return
+      }
+
+      const newCableId = `cable-${Date.now()}`
+      schemaStore.addCable({
+        id: newCableId,
+        name: 'New Cable',
+        sourceId: pendingSourceId.value,
+        targetId: componentId,
+        props: { lengthM: 2, gaugeAwg: 8, material: 'copper' },
+        derived: { maxCurrentA: 80, voltageDropV: 0.2 },
+      })
+      schemaStore.setSelection({ cableId: newCableId })
+      pendingSourceId.value = null
+      applySelection()
+      layer?.batchDraw()
+      return
+    }
+
     schemaStore.setSelection({ componentId })
     applySelection()
     layer?.batchDraw()
+  }
+
+  group.on('click tap', (event) => {
+    event.cancelBubble = true
+    handleNodeClick()
   })
 
   group.on('dragmove', () => {
@@ -149,7 +191,9 @@ const ensureCable = (cableId: string) => {
 const syncScene = () => {
   if (!layer) return
 
-  const currentComponentIds = new Set(schemaStore.schema.components.map((component) => component.id))
+  const currentComponentIds = new Set(
+    schemaStore.schema.components.map((component) => component.id),
+  )
   const currentCableIds = new Set(schemaStore.schema.cables.map((cable) => cable.id))
 
   schemaStore.schema.components.forEach((component) => {
@@ -205,6 +249,9 @@ const initStage = () => {
     opacity: 0.02,
   })
   background.on('click tap', () => {
+    if (pendingSourceId.value) {
+      pendingSourceId.value = null
+    }
     schemaStore.setSelection({})
     applySelection()
     layer?.batchDraw()
@@ -233,6 +280,17 @@ watch(
   () => schemaStore.schema,
   () => syncScene(),
   { deep: true },
+)
+
+watch(
+  () => props.mode,
+  (mode) => {
+    if (mode !== 'connect') {
+      pendingSourceId.value = null
+      applySelection()
+      layer?.batchDraw()
+    }
+  },
 )
 
 onMounted(() => initStage())

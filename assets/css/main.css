@@ -1,6 +1,6 @@
 :root {
   color-scheme: light;
-  font-family: "Space Grotesk", "IBM Plex Sans", "Segoe UI", sans-serif;
+  font-family: 'Space Grotesk', 'IBM Plex Sans', 'Segoe UI', sans-serif;
   line-height: 1.5;
   font-weight: 400;
   color: #141414;
@@ -87,13 +87,18 @@ body {
   color: #2d2a25;
 }
 
+.btn-active {
+  background: #2d2a25;
+  color: #fdf7ec;
+}
+
 .workspace {
   display: grid;
   grid-template-columns: 220px 1fr 280px;
   grid-template-rows: 1fr auto;
   grid-template-areas:
-    "left canvas right"
-    "bottom bottom bottom";
+    'left canvas right'
+    'bottom bottom bottom';
   gap: 16px;
   padding: 24px;
 }
@@ -221,9 +226,9 @@ body {
   .workspace {
     grid-template-columns: 1fr;
     grid-template-areas:
-      "canvas"
-      "left"
-      "right"
-      "bottom";
+      'canvas'
+      'left'
+      'right'
+      'bottom';
   }
 }
