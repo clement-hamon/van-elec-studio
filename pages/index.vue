@@ -6,10 +6,17 @@
         <p>Drag components into the canvas.</p>
       </div>
       <div class="panel-body">
-        <button class="list-item" type="button">Battery</button>
-        <button class="list-item" type="button">Inverter</button>
-        <button class="list-item" type="button">Fuse</button>
-        <button class="list-item" type="button">Cable</button>
+        <button
+          v-for="item in libraryItems"
+          :key="item.id"
+          class="list-item"
+          type="button"
+          draggable="true"
+          @dragstart="onDragStart($event, item.id)"
+          @click="addComponent(item.id)"
+        >
+          {{ item.label }}
+        </button>
       </div>
     </aside>
 
@@ -76,6 +83,10 @@
             <input id="cable-name" v-model="cableName" type="text" >
           </div>
           <div class="field">
+            <label for="current">Expected Current (A)</label>
+            <input id="current" v-model.number="cableCurrent" type="number" step="0.1" >
+          </div>
+          <div class="field">
             <label for="length">Cable Length (m)</label>
             <input id="length" v-model.number="cableLength" type="number" step="0.1" >
           </div>
@@ -89,6 +100,13 @@
               <option value="copper">Copper</option>
               <option value="aluminum">Aluminum</option>
             </select>
+          </div>
+          <div class="field field-readonly">
+            <label>Derived</label>
+            <div class="derived">
+              <div>Ampacity: {{ cableAmpacity }} A</div>
+              <div>Voltage drop: {{ cableVoltageDrop }} V</div>
+            </div>
           </div>
         </template>
       </div>
@@ -128,6 +146,16 @@ const schemaStore = useSchemaStore()
 
 const issues = computed(() => schemaStore.issues)
 const mode = ref<'select' | 'connect'>('select')
+const libraryItems = computed(() => schemaStore.registry)
+
+const addComponent = (typeId: string) => {
+  schemaStore.addComponentFromType(typeId)
+}
+
+const onDragStart = (event: DragEvent, typeId: string) => {
+  event.dataTransfer?.setData('application/x-van-elec-component', typeId)
+  event.dataTransfer?.setData('text/plain', typeId)
+}
 
 const selectedComponent = computed(() => schemaStore.selectedComponent)
 const selectedCable = computed(() => schemaStore.selectedCable)
@@ -216,4 +244,19 @@ const cableMaterial = computed({
     })
   },
 })
+
+const cableCurrent = computed({
+  get: () => selectedCable.value?.props.currentA ?? 0,
+  set: (value: number) => {
+    if (!selectedCable.value) return
+    schemaStore.updateCable(selectedCable.value.id, {
+      props: { ...selectedCable.value.props, currentA: value },
+    })
+  },
+})
+
+const cableAmpacity = computed(() => selectedCable.value?.derived.ampacityA ?? 0)
+const cableVoltageDrop = computed(() =>
+  selectedCable.value ? selectedCable.value.derived.voltageDropV.toFixed(2) : '0.00',
+)
 </script>

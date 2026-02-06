@@ -48,10 +48,13 @@ export type CableProps = {
   lengthM: number
   gaugeAwg: number
   material: 'copper' | 'aluminum'
+  currentA?: number
 }
 
 export type CableDerived = {
-  maxCurrentA: number
+  ampacityA: number
+  resistanceOhmPerM: number
+  loopResistanceOhm: number
   voltageDropV: number
 }
 

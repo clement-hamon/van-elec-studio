@@ -1,5 +1,13 @@
 <template>
-  <div ref="container" class="canvas-stage" />
+  <div
+    ref="container"
+    class="canvas-stage"
+    :class="{ 'canvas-stage--drag': isDragOver }"
+    @dragover.prevent
+    @dragenter.prevent="onDragEnter"
+    @dragleave.prevent="onDragLeave"
+    @drop.prevent="onDrop"
+  />
 </template>
 
 <script setup lang="ts">
@@ -16,17 +24,50 @@ const props = defineProps<{
 const container = ref<HTMLDivElement | null>(null)
 const schemaStore = useSchemaStore()
 const pendingSourceId = ref<string | null>(null)
+const isDragOver = ref(false)
 
 let stage: Konva.Stage | null = null
 let layer: Konva.Layer | null = null
 let background: Konva.Rect | null = null
 let resizeObserver: ResizeObserver | null = null
+let keydownHandler: ((event: KeyboardEvent) => void) | null = null
 
 const nodeMap = new Map<string, Konva.Group>()
 const lineMap = new Map<string, Konva.Line>()
 
 const nodeWidth = 160
 const nodeHeight = 90
+
+const getDropPosition = (event: DragEvent) => {
+  if (!container.value) return null
+  const rect = container.value.getBoundingClientRect()
+  const x = event.clientX - rect.left - nodeWidth / 2
+  const y = event.clientY - rect.top - nodeHeight / 2
+  return { x, y }
+}
+
+const isEditableTarget = (target: EventTarget | null) => {
+  if (!(target instanceof HTMLElement)) return false
+  const tag = target.tagName.toLowerCase()
+  return tag === 'input' || tag === 'textarea' || tag === 'select' || target.isContentEditable
+}
+
+const onDragEnter = () => {
+  isDragOver.value = true
+}
+
+const onDragLeave = () => {
+  isDragOver.value = false
+}
+
+const onDrop = (event: DragEvent) => {
+  isDragOver.value = false
+  const typeId = event.dataTransfer?.getData('application/x-van-elec-component')
+  if (!typeId) return
+  const position = getDropPosition(event)
+  if (!position) return
+  schemaStore.addComponentFromType(typeId, position)
+}
 
 const getNodeCenter = (nodeId: string) => {
   const node = nodeMap.get(nodeId)
@@ -125,8 +166,8 @@ const ensureNode = (componentId: string) => {
         name: 'New Cable',
         sourceId: pendingSourceId.value,
         targetId: componentId,
-        props: { lengthM: 2, gaugeAwg: 8, material: 'copper' },
-        derived: { maxCurrentA: 80, voltageDropV: 0.2 },
+        props: { lengthM: 2, gaugeAwg: 8, material: 'copper', currentA: 20 },
+        derived: { ampacityA: 0, resistanceOhmPerM: 0, loopResistanceOhm: 0, voltageDropV: 0 },
       })
       schemaStore.setSelection({ cableId: newCableId })
       pendingSourceId.value = null
@@ -274,6 +315,7 @@ const initStage = () => {
   resizeObserver.observe(container.value)
 
   syncScene()
+  registerKeyboardShortcuts()
 }
 
 watch(
@@ -298,5 +340,32 @@ onMounted(() => initStage())
 onBeforeUnmount(() => {
   resizeObserver?.disconnect()
   stage?.destroy()
+  if (keydownHandler) {
+    window.removeEventListener('keydown', keydownHandler)
+  }
 })
+
+const registerKeyboardShortcuts = () => {
+  keydownHandler = (event: KeyboardEvent) => {
+    if (isEditableTarget(event.target)) return
+    if (event.key !== 'Delete' && event.key !== 'Backspace') return
+    event.preventDefault()
+
+    const selectedComponentId = schemaStore.schema.selection.componentId
+    const selectedCableId = schemaStore.schema.selection.cableId
+
+    if (selectedComponentId) {
+      schemaStore.removeComponent(selectedComponentId)
+      pendingSourceId.value = null
+      return
+    }
+
+    if (selectedCableId) {
+      schemaStore.removeCable(selectedCableId)
+      return
+    }
+  }
+
+  window.addEventListener('keydown', keydownHandler)
+}
 </script>
