@@ -49,9 +49,16 @@
         <p>Issues and suggested fixes will appear here.</p>
       </div>
       <div class="panel-body">
-        <div class="issue">
-          <span class="issue-tag">Warning</span>
-          Cable voltage drop exceeds target. Try 8 AWG or shorten the run.
+        <div v-if="issues.length === 0" class="issue">
+          <span class="issue-tag issue-ok">Ok</span>
+          No issues detected.
+        </div>
+        <div v-for="issue in issues" :key="issue.id" class="issue">
+          <span class="issue-tag" :class="issue.level === 'error' ? 'issue-error' : 'issue-warning'">
+            {{ issue.level }}
+          </span>
+          {{ issue.message }}
+          <span v-if="issue.suggestion" class="issue-suggestion">{{ issue.suggestion }}</span>
         </div>
       </div>
     </footer>
@@ -66,4 +73,5 @@ const schemaStore = useSchemaStore()
 
 const components = computed(() => schemaStore.schema.components)
 const cables = computed(() => schemaStore.schema.cables)
+const issues = computed(() => schemaStore.issues)
 </script>

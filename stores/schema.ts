@@ -1,4 +1,5 @@
 import { defineStore } from 'pinia'
+import { runValidation } from '~/services/validation'
 import type {
   Cable,
   ComponentInstance,
@@ -72,7 +73,7 @@ const defaultSchema = (): SchemaState => ({
 export const useSchemaStore = defineStore('schema', {
   state: () => ({
     schema: defaultSchema(),
-    issues: [] as Issue[],
+    issues: runValidation(defaultSchema()),
     registry: componentRegistry,
   }),
   getters: {
@@ -86,8 +87,12 @@ export const useSchemaStore = defineStore('schema', {
     },
   },
   actions: {
+    refreshValidation() {
+      this.issues = runValidation(this.schema)
+    },
     reset() {
       this.schema = defaultSchema()
+      this.refreshValidation()
     },
     setSelection(payload: { componentId?: string; cableId?: string; groupId?: string }) {
       this.schema.selection = payload
@@ -95,26 +100,31 @@ export const useSchemaStore = defineStore('schema', {
     addComponent(instance: ComponentInstance) {
       this.schema.components.push(instance)
       this.schema.updatedAt = nowIso()
+      this.refreshValidation()
     },
     updateComponent(id: string, props: Partial<ComponentInstance>) {
       const idx = this.schema.components.findIndex((component) => component.id === id)
       if (idx === -1) return
       this.schema.components[idx] = { ...this.schema.components[idx], ...props }
       this.schema.updatedAt = nowIso()
+      this.refreshValidation()
     },
     addCable(cable: Cable) {
       this.schema.cables.push(cable)
       this.schema.updatedAt = nowIso()
+      this.refreshValidation()
     },
     updateCable(id: string, props: Partial<Cable>) {
       const idx = this.schema.cables.findIndex((cable) => cable.id === id)
       if (idx === -1) return
       this.schema.cables[idx] = { ...this.schema.cables[idx], ...props }
       this.schema.updatedAt = nowIso()
+      this.refreshValidation()
     },
     addGroup(group: Group) {
       this.schema.groups.push(group)
       this.schema.updatedAt = nowIso()
+      this.refreshValidation()
     },
     setIssues(issues: Issue[]) {
       this.issues = issues

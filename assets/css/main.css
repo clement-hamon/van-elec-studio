@@ -197,6 +197,26 @@ body {
   text-transform: uppercase;
 }
 
+.issue-warning {
+  background: #f2b46d;
+}
+
+.issue-error {
+  background: #e07a5f;
+  color: #fff;
+}
+
+.issue-ok {
+  background: #7ac1b1;
+  color: #0f2e28;
+}
+
+.issue-suggestion {
+  margin-left: 8px;
+  color: #6a635c;
+  font-size: 0.8rem;
+}
+
 @media (max-width: 960px) {
   .workspace {
     grid-template-columns: 1fr;
