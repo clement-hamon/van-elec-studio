@@ -29,6 +29,8 @@ jobs:
         run: npm install
 
       - name: Build
+        env:
+          NUXT_APP_BASE_URL: /van-elec-studio/
         run: npm run build
 
       - name: Configure Pages
@@ -37,7 +39,7 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: dist
+          path: .output/public
 
   deploy:
     runs-on: ubuntu-latest

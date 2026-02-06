@@ -17,10 +17,6 @@ body {
   background: radial-gradient(circle at top, #f7eee0 0%, #f6f3ee 55%, #eef0f2 100%);
 }
 
-#app {
-  min-height: 100vh;
-}
-
 .page {
   max-width: 960px;
   margin: 0 auto;

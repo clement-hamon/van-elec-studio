@@ -2,6 +2,8 @@
 .env
 .env.*
 dist
+.nuxt
+.output
 node_modules
 npm-debug.log*
 yarn-debug.log*

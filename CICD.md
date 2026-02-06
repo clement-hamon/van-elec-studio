@@ -1,6 +1,6 @@
-# CI/CD for GitHub Pages (Free)
+# CI/CD for GitHub Pages (Free, Nuxt 3)
 
-This project is designed to deploy automatically to GitHub Pages on every push or merge to the `main` branch. It uses GitHub Actions with the official Pages workflow (build → upload artifact → deploy).
+This project is designed to deploy automatically to GitHub Pages on every push or merge to the `main` branch. It uses GitHub Actions with the official Pages workflow (build → upload artifact → deploy) and Nuxt’s GitHub Pages preset.
 
 ## Repository Setup (One-Time)
 
@@ -54,6 +54,8 @@ jobs:
         run: npm install
 
       - name: Build
+        env:
+          NUXT_APP_BASE_URL: /van-elec-studio/
         run: npm run build
 
       - name: Configure Pages
@@ -62,7 +64,7 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: dist
+          path: .output/public
 
   deploy:
     runs-on: ubuntu-latest
@@ -76,7 +78,7 @@ jobs:
         uses: actions/deploy-pages@v4
 ```
 
-## Vite Base Path (Required for Project Pages)
+## Nuxt Base Path (Required for Project Pages)
 
 If the site will be hosted at:
 
@@ -84,11 +86,13 @@ If the site will be hosted at:
 https://clement-hamon.github.io/van-elec-studio/
 ```
 
-then Vite must be configured with the repository name as the base path:
+then Nuxt must be configured with the repository name as the base path:
 
 ```ts
-export default defineConfig({
-  base: '/van-elec-studio/',
+export default defineNuxtConfig({
+  app: {
+    baseURL: '/van-elec-studio/',
+  },
 })
 ```
 

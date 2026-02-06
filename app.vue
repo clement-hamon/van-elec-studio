@@ -1,5 +1,3 @@
-<script setup lang="ts"></script>
-
 <template>
   <main class="page">
     <header class="hero">
@@ -12,8 +10,7 @@
     </header>
     <section class="card">
       <h2>Project Status</h2>
-      <p>Scaffold ready. Next: domain model, rules engine, and canvas editor.</p>
+      <p>Nuxt scaffold ready. Next: domain model, rules engine, and canvas editor.</p>
     </section>
   </main>
 </template>
-

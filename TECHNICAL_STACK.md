@@ -1,12 +1,12 @@
-# Technical Stack and Architecture (Vue 3 + Konva)
+# Technical Stack and Architecture (Nuxt 3 + Konva)
 
 This document describes the technical stack and overall architecture for a long‑term, high‑quality electrical schema editor. It focuses on how the system is structured, how parts communicate, and how data is stored locally on the user’s machine.
 
 ## Stack Summary
 
-- UI Framework: Vue 3 (Composition API)
+- UI Framework: Nuxt 3 (Vue 3 + Composition API)
 - Language: TypeScript
-- Build Tooling: Vite
+- Build Tooling: Nuxt (Vite-based)
 - State Management: Pinia
 - Diagram Rendering: Konva (Canvas)
 - Persistence: Browser Local Storage
@@ -166,4 +166,3 @@ All user data is stored locally in the browser to keep the project self‑contai
 - New component types are added to a registry without changing rendering logic.
 - New validation rules can be added without touching the UI.
 - Rendering style can be upgraded while keeping domain logic intact.
-
