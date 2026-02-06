@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia'
 import { computeCableDerived } from '~/services/cable'
+import { computeCablePower } from '~/services/power-flow'
 import { runValidation } from '~/services/validation'
 import type {
   Cable,
@@ -62,14 +63,44 @@ const componentRegistry: ComponentType[] = [
     ports: [{ id: 'dc-in', label: 'DC In', direction: 'in', domain: 'dc', maxCurrent: 5 }],
     constraints: { voltageDomain: '12V', maxCurrent: 5 },
   },
+  {
+    id: 'dc-bus',
+    label: 'DC Bus',
+    category: 'distribution',
+    defaultProps: { voltage: 12, maxBranches: 4 },
+    ports: [
+      { id: 'in', label: 'In', direction: 'in', domain: 'dc', maxCurrent: 200 },
+      { id: 'out-1', label: 'Out 1', direction: 'out', domain: 'dc', maxCurrent: 50 },
+      { id: 'out-2', label: 'Out 2', direction: 'out', domain: 'dc', maxCurrent: 50 },
+      { id: 'out-3', label: 'Out 3', direction: 'out', domain: 'dc', maxCurrent: 50 },
+      { id: 'out-4', label: 'Out 4', direction: 'out', domain: 'dc', maxCurrent: 50 },
+    ],
+    constraints: { voltageDomain: '12V', maxCurrent: 200 },
+  },
 ]
 
 const makeId = (prefix: string) => `${prefix}-${Date.now()}-${Math.floor(Math.random() * 1000)}`
 
-const buildCable = (cable: Cable): Cable => ({
+const buildCable = (
+  cable: Cable,
+  powerInfo?: { expectedCurrentA: number; expectedPowerW: number; circuitVoltageV: number },
+): Cable => ({
   ...cable,
-  derived: computeCableDerived(cable.props),
+  derived: computeCableDerived(
+    cable.props,
+    powerInfo?.expectedCurrentA ?? 0,
+    powerInfo?.expectedPowerW ?? 0,
+    powerInfo?.circuitVoltageV ?? 0,
+  ),
 })
+
+const applyCableDerived = (schema: SchemaState, registry: ComponentType[]): SchemaState => {
+  const powerMap = computeCablePower(schema, registry)
+  return {
+    ...schema,
+    cables: schema.cables.map((cable) => buildCable(cable, powerMap.get(cable.id))),
+  }
+}
 
 const defaultSchema = (): SchemaState => ({
   components: [
@@ -91,14 +122,22 @@ const defaultSchema = (): SchemaState => ({
     },
   ],
   cables: [
-    buildCable({
+    {
       id: 'cable-1',
       name: 'Main Feed',
       sourceId: 'comp-1',
       targetId: 'comp-2',
-      props: { lengthM: 2, gaugeAwg: 6, material: 'copper', currentA: 40 },
-      derived: { ampacityA: 0, resistanceOhmPerM: 0, loopResistanceOhm: 0, voltageDropV: 0 },
-    }),
+      props: { lengthM: 2, gaugeAwg: 6, material: 'copper' },
+      derived: {
+        ampacityA: 0,
+        expectedCurrentA: 0,
+        expectedPowerW: 0,
+        circuitVoltageV: 0,
+        resistanceOhmPerM: 0,
+        loopResistanceOhm: 0,
+        voltageDropV: 0,
+      },
+    },
   ],
   groups: [],
   selection: {},
@@ -106,11 +145,14 @@ const defaultSchema = (): SchemaState => ({
 })
 
 export const useSchemaStore = defineStore('schema', {
-  state: () => ({
-    schema: defaultSchema(),
-    issues: runValidation(defaultSchema()),
-    registry: componentRegistry,
-  }),
+  state: () => {
+    const schema = applyCableDerived(defaultSchema(), componentRegistry)
+    return {
+      schema,
+      issues: runValidation(schema),
+      registry: componentRegistry,
+    }
+  },
   getters: {
     selectedComponent(state) {
       return state.schema.components.find(
@@ -148,10 +190,11 @@ export const useSchemaStore = defineStore('schema', {
       })
     },
     refreshValidation() {
+      this.schema = applyCableDerived(this.schema, this.registry)
       this.issues = runValidation(this.schema)
     },
     reset() {
-      this.schema = defaultSchema()
+      this.schema = applyCableDerived(defaultSchema(), this.registry)
       this.refreshValidation()
     },
     setSelection(payload: { componentId?: string; cableId?: string; groupId?: string }) {
@@ -170,7 +213,7 @@ export const useSchemaStore = defineStore('schema', {
       this.refreshValidation()
     },
     addCable(cable: Cable) {
-      this.schema.cables.push(buildCable(cable))
+      this.schema.cables.push(cable)
       this.schema.updatedAt = nowIso()
       this.refreshValidation()
     },
@@ -178,7 +221,7 @@ export const useSchemaStore = defineStore('schema', {
       const idx = this.schema.cables.findIndex((cable) => cable.id === id)
       if (idx === -1) return
       const next = { ...this.schema.cables[idx], ...props }
-      this.schema.cables[idx] = buildCable(next)
+      this.schema.cables[idx] = next
       this.schema.updatedAt = nowIso()
       this.refreshValidation()
     },

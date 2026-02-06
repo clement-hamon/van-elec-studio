@@ -71,6 +71,10 @@
             <label for="capacity">Capacity (Ah)</label>
             <input id="capacity" v-model.number="componentCapacity" type="number" step="1" >
           </div>
+          <div v-if="componentWatt !== null" class="field">
+            <label for="watt">Power (W)</label>
+            <input id="watt" v-model.number="componentWatt" type="number" step="1" >
+          </div>
           <div v-if="componentRating !== null" class="field">
             <label for="rating">Rating (A)</label>
             <input id="rating" v-model.number="componentRating" type="number" step="1" >
@@ -81,10 +85,6 @@
           <div class="field">
             <label for="cable-name">Cable Name</label>
             <input id="cable-name" v-model="cableName" type="text" >
-          </div>
-          <div class="field">
-            <label for="current">Expected Current (A)</label>
-            <input id="current" v-model.number="cableCurrent" type="number" step="0.1" >
           </div>
           <div class="field">
             <label for="length">Cable Length (m)</label>
@@ -104,6 +104,9 @@
           <div class="field field-readonly">
             <label>Derived</label>
             <div class="derived">
+              <div>Expected current: {{ cableExpectedCurrent }} A</div>
+              <div>Downstream power: {{ cableExpectedPower }} W</div>
+              <div>Circuit voltage: {{ cableCircuitVoltage }} V</div>
               <div>Ampacity: {{ cableAmpacity }} A</div>
               <div>Voltage drop: {{ cableVoltageDrop }} V</div>
             </div>
@@ -207,6 +210,19 @@ const componentRating = computed({
   },
 })
 
+const componentWatt = computed({
+  get: () => {
+    const watt = selectedComponent.value?.props.watt
+    return typeof watt === 'number' ? watt : null
+  },
+  set: (value: number | null) => {
+    if (!selectedComponent.value || value === null) return
+    schemaStore.updateComponent(selectedComponent.value.id, {
+      props: { ...selectedComponent.value.props, watt: value },
+    })
+  },
+})
+
 const cableName = computed({
   get: () => selectedCable.value?.name ?? '',
   set: (value: string) => {
@@ -245,16 +261,15 @@ const cableMaterial = computed({
   },
 })
 
-const cableCurrent = computed({
-  get: () => selectedCable.value?.props.currentA ?? 0,
-  set: (value: number) => {
-    if (!selectedCable.value) return
-    schemaStore.updateCable(selectedCable.value.id, {
-      props: { ...selectedCable.value.props, currentA: value },
-    })
-  },
-})
-
+const cableExpectedCurrent = computed(() =>
+  selectedCable.value ? selectedCable.value.derived.expectedCurrentA.toFixed(1) : '0.0',
+)
+const cableExpectedPower = computed(() =>
+  selectedCable.value ? selectedCable.value.derived.expectedPowerW.toFixed(0) : '0',
+)
+const cableCircuitVoltage = computed(() =>
+  selectedCable.value ? selectedCable.value.derived.circuitVoltageV.toFixed(1) : '0.0',
+)
 const cableAmpacity = computed(() => selectedCable.value?.derived.ampacityA ?? 0)
 const cableVoltageDrop = computed(() =>
   selectedCable.value ? selectedCable.value.derived.voltageDropV.toFixed(2) : '0.00',

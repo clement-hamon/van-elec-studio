@@ -166,8 +166,16 @@ const ensureNode = (componentId: string) => {
         name: 'New Cable',
         sourceId: pendingSourceId.value,
         targetId: componentId,
-        props: { lengthM: 2, gaugeAwg: 8, material: 'copper', currentA: 20 },
-        derived: { ampacityA: 0, resistanceOhmPerM: 0, loopResistanceOhm: 0, voltageDropV: 0 },
+        props: { lengthM: 2, gaugeAwg: 8, material: 'copper' },
+        derived: {
+          ampacityA: 0,
+          expectedCurrentA: 0,
+          expectedPowerW: 0,
+          circuitVoltageV: 0,
+          resistanceOhmPerM: 0,
+          loopResistanceOhm: 0,
+          voltageDropV: 0,
+        },
       })
       schemaStore.setSelection({ cableId: newCableId })
       pendingSourceId.value = null

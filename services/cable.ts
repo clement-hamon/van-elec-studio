@@ -44,15 +44,22 @@ const estimateAmpacity = (awg: number) => {
   return Math.max(5, 35 - (rounded - 10) * 2)
 }
 
-export const computeCableDerived = (props: CableProps): CableDerived => {
+export const computeCableDerived = (
+  props: CableProps,
+  expectedCurrentA = 0,
+  expectedPowerW = 0,
+  circuitVoltageV = 0,
+): CableDerived => {
   const length = Math.max(0, props.lengthM)
   const resistance = resistancePerMeter(props.gaugeAwg, props.material)
   const loopResistance = resistance * length * 2
-  const current = props.currentA ?? 0
-  const voltageDrop = loopResistance * current
+  const voltageDrop = loopResistance * expectedCurrentA
 
   return {
     ampacityA: estimateAmpacity(props.gaugeAwg),
+    expectedCurrentA,
+    expectedPowerW,
+    circuitVoltageV,
     resistanceOhmPerM: resistance,
     loopResistanceOhm: loopResistance,
     voltageDropV: voltageDrop,
