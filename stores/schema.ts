@@ -4,6 +4,7 @@ import { computeCablePower, resolveComponentVoltage } from '~/services/power-flo
 import { runValidation } from '~/services/validation'
 import { computeChargeOutputs, computeChargeSummary } from '~/services/charging'
 import { componentRegistry } from '~/src/domain/components/registry'
+import { loadSchema, saveSchema } from '~/services/storage'
 import type {
   Cable,
   ComponentInstance,
@@ -14,6 +15,8 @@ import type {
 } from '~/types/schema'
 
 const nowIso = () => new Date().toISOString()
+const SAVE_DEBOUNCE_MS = 500
+let saveTimer: ReturnType<typeof setTimeout> | null = null
 
 const makeId = (prefix: string) => `${prefix}-${Date.now()}-${Math.floor(Math.random() * 1000)}`
 
@@ -87,6 +90,28 @@ const applyCableDerived = (schema: SchemaState, registry: ComponentType[]): Sche
   }
 }
 
+const applyComponentDerived = (schema: SchemaState, registry: ComponentType[]): SchemaState => {
+  const typeById = new Map(registry.map((type) => [type.id, type]))
+  return {
+    ...schema,
+    components: schema.components.map((component) => {
+      const type = typeById.get(component.typeId)
+      if (!type) return component
+      const derived = { ...component.derived }
+      if (
+        typeof derived.maxCurrentA !== 'number' &&
+        typeof type.constraints?.maxCurrent === 'number'
+      ) {
+        derived.maxCurrentA = type.constraints.maxCurrent
+      }
+      if (!derived.voltageDomain && type.constraints?.voltageDomain) {
+        derived.voltageDomain = type.constraints.voltageDomain
+      }
+      return { ...component, derived }
+    }),
+  }
+}
+
 const applyChargingDerived = (schema: SchemaState, registry: ComponentType[]): SchemaState => {
   const summaries = computeChargeSummary(schema, registry)
   if (summaries.size === 0) return schema
@@ -151,12 +176,21 @@ const defaultSchema = (): SchemaState => ({
   updatedAt: nowIso(),
 })
 
+const applyDerivedAll = (schema: SchemaState, registry: ComponentType[]) =>
+  applyChargingDerived(
+    applyCableDerived(applyComponentDerived(schema, registry), registry),
+    registry,
+  )
+
+const hydrateSchema = (registry: ComponentType[]) => {
+  const saved = loadSchema()
+  const base = saved ?? defaultSchema()
+  return applyDerivedAll(base, registry)
+}
+
 export const useSchemaStore = defineStore('schema', {
   state: () => {
-    const schema = applyChargingDerived(
-      applyCableDerived(defaultSchema(), componentRegistry),
-      componentRegistry,
-    )
+    const schema = hydrateSchema(componentRegistry)
     return {
       schema,
       issues: runValidation(schema, componentRegistry),
@@ -200,17 +234,12 @@ export const useSchemaStore = defineStore('schema', {
       })
     },
     refreshValidation() {
-      this.schema = applyChargingDerived(
-        applyCableDerived(this.schema, this.registry),
-        this.registry,
-      )
+      this.schema = applyDerivedAll(this.schema, this.registry)
       this.issues = runValidation(this.schema, this.registry)
+      this.scheduleSave()
     },
     reset() {
-      this.schema = applyChargingDerived(
-        applyCableDerived(defaultSchema(), this.registry),
-        this.registry,
-      )
+      this.schema = applyDerivedAll(defaultSchema(), this.registry)
       this.refreshValidation()
     },
     setSelection(payload: { componentId?: string; cableId?: string; groupId?: string }) {
@@ -266,6 +295,23 @@ export const useSchemaStore = defineStore('schema', {
       this.schema.groups.push(group)
       this.schema.updatedAt = nowIso()
       this.refreshValidation()
+    },
+    loadFromStorage() {
+      const saved = loadSchema()
+      if (!saved) return false
+      this.schema = applyDerivedAll(saved, this.registry)
+      this.issues = runValidation(this.schema, this.registry)
+      return true
+    },
+    saveNow() {
+      saveSchema(this.schema)
+    },
+    scheduleSave() {
+      if (saveTimer) clearTimeout(saveTimer)
+      saveTimer = setTimeout(() => {
+        saveSchema(this.schema)
+        saveTimer = null
+      }, SAVE_DEBOUNCE_MS)
     },
     setIssues(issues: Issue[]) {
       this.issues = issues
