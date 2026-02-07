@@ -1,6 +1,8 @@
 import type { ComponentType, Issue, SchemaState } from '~/types/schema'
 import { rules } from '~/rules'
+import { analyzeSchema } from '~/src/circuit-graph'
 
 export const runValidation = (schema: SchemaState, registry: ComponentType[]): Issue[] => {
-  return rules.flatMap((rule) => rule.run({ schema, registry }))
+  const result = analyzeSchema(schema, registry, { rules })
+  return result.diagnostics
 }

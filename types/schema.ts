@@ -169,9 +169,18 @@ export type SelectionState = {
 
 export type Issue = {
   id: Id
-  level: 'warning' | 'error'
+  level: 'warning' | 'error' | 'info'
   message: string
   targetType: 'component' | 'cable' | 'group'
   targetId: Id
   suggestion?: string
+  category?: string
+  messageKey?: string
+  params?: Record<string, string | number>
+  blame?: {
+    nodes?: Id[]
+    edges?: Id[]
+    ports?: Id[]
+  }
+  ruleId?: string
 }
