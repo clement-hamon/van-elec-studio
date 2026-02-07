@@ -1,8 +1,8 @@
 import { defineStore } from 'pinia'
 import { computeCableDerived } from '~/services/cable'
-import { computeCablePower } from '~/services/power-flow'
+import { computeCablePower, resolveComponentVoltage } from '~/services/power-flow'
 import { runValidation } from '~/services/validation'
-import { computeChargeSummary } from '~/services/charging'
+import { computeChargeOutputs, computeChargeSummary } from '~/services/charging'
 import { componentRegistry } from '~/src/domain/components/registry'
 import type {
   Cable,
@@ -32,9 +32,35 @@ const buildCable = (
 
 const applyCableDerived = (schema: SchemaState, registry: ComponentType[]): SchemaState => {
   const powerMap = computeCablePower(schema, registry)
+  const chargeOutputs = computeChargeOutputs(schema, registry)
+  const componentById = new Map(schema.components.map((component) => [component.id, component]))
+  const typeById = new Map(registry.map((type) => [type.id, type]))
+
   return {
     ...schema,
-    cables: schema.cables.map((cable) => buildCable(cable, powerMap.get(cable.id))),
+    cables: schema.cables.map((cable) => {
+      const powerInfo = powerMap.get(cable.id)
+      const expectedCurrent = powerInfo?.expectedCurrentA ?? 0
+      if (expectedCurrent > 0) return buildCable(cable, powerInfo)
+
+      const target = componentById.get(cable.targetId)
+      const targetType = target ? typeById.get(target.typeId) : undefined
+      const isBattery = targetType?.chargePathRole === 'battery' || targetType?.id === 'battery'
+      if (!isBattery) return buildCable(cable, powerInfo)
+
+      const chargeCurrent = chargeOutputs.get(cable.sourceId) ?? 0
+      if (chargeCurrent <= 0) return buildCable(cable, powerInfo)
+
+      const source = componentById.get(cable.sourceId)
+      const sourceType = source ? typeById.get(source.typeId) : undefined
+      const voltage = resolveComponentVoltage(source, sourceType)
+
+      return buildCable(cable, {
+        expectedCurrentA: chargeCurrent,
+        expectedPowerW: chargeCurrent * voltage,
+        circuitVoltageV: voltage,
+      })
+    }),
   }
 }
 

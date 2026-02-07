@@ -76,57 +76,10 @@ const resolveOutputLimit = (
 const isBattery = (component: ComponentInstance, type: ComponentType | undefined) =>
   type?.chargePathRole === 'battery' || type?.id === 'battery'
 
-export const findChargePaths = (schema: SchemaState, registry: ComponentType[]): ChargePath[] => {
-  const typeById = new Map(registry.map((item) => [item.id, item]))
-  const componentById = new Map(schema.components.map((item) => [item.id, item]))
-  const outgoing = new Map<string, string[]>()
-
-  schema.cables.forEach((cable) => {
-    const list = outgoing.get(cable.sourceId) ?? []
-    list.push(cable.targetId)
-    outgoing.set(cable.sourceId, list)
-  })
-
-  const paths: ChargePath[] = []
-
-  schema.components.forEach((component) => {
-    const type = typeById.get(component.typeId)
-    if (!type || type.energyRole !== 'source') return
-
-    const stack: { nodeId: string; path: string[]; visited: Set<string> }[] = [
-      { nodeId: component.id, path: [component.id], visited: new Set([component.id]) },
-    ]
-
-    while (stack.length) {
-      const current = stack.pop()
-      if (!current) continue
-      const nextIds = outgoing.get(current.nodeId) ?? []
-
-      nextIds.forEach((nextId) => {
-        if (current.visited.has(nextId)) return
-        const nextPath = [...current.path, nextId]
-        const nextVisited = new Set(current.visited)
-        nextVisited.add(nextId)
-
-        const nextComponent = componentById.get(nextId)
-        const nextType = nextComponent ? typeById.get(nextComponent.typeId) : undefined
-        if (nextComponent && isBattery(nextComponent, nextType)) {
-          paths.push({ sourceId: component.id, batteryId: nextId, path: nextPath })
-          return
-        }
-
-        stack.push({ nodeId: nextId, path: nextPath, visited: nextVisited })
-      })
-    }
-  })
-
-  return paths
-}
-
-export const computeChargeSummary = (
+export const computeChargeOutputs = (
   schema: SchemaState,
   registry: ComponentType[],
-): Map<string, ChargeSummary> => {
+): Map<string, number> => {
   const typeById = new Map(registry.map((item) => [item.id, item]))
   const outgoing = new Map<string, string[]>()
   const incoming = new Map<string, string[]>()
@@ -194,6 +147,70 @@ export const computeChargeSummary = (
     }
     outputById.set(componentId, output)
   })
+
+  return outputById
+}
+
+export const findChargePaths = (schema: SchemaState, registry: ComponentType[]): ChargePath[] => {
+  const typeById = new Map(registry.map((item) => [item.id, item]))
+  const componentById = new Map(schema.components.map((item) => [item.id, item]))
+  const outgoing = new Map<string, string[]>()
+
+  schema.cables.forEach((cable) => {
+    const list = outgoing.get(cable.sourceId) ?? []
+    list.push(cable.targetId)
+    outgoing.set(cable.sourceId, list)
+  })
+
+  const paths: ChargePath[] = []
+
+  schema.components.forEach((component) => {
+    const type = typeById.get(component.typeId)
+    if (!type || type.energyRole !== 'source') return
+
+    const stack: { nodeId: string; path: string[]; visited: Set<string> }[] = [
+      { nodeId: component.id, path: [component.id], visited: new Set([component.id]) },
+    ]
+
+    while (stack.length) {
+      const current = stack.pop()
+      if (!current) continue
+      const nextIds = outgoing.get(current.nodeId) ?? []
+
+      nextIds.forEach((nextId) => {
+        if (current.visited.has(nextId)) return
+        const nextPath = [...current.path, nextId]
+        const nextVisited = new Set(current.visited)
+        nextVisited.add(nextId)
+
+        const nextComponent = componentById.get(nextId)
+        const nextType = nextComponent ? typeById.get(nextComponent.typeId) : undefined
+        if (nextComponent && isBattery(nextComponent, nextType)) {
+          paths.push({ sourceId: component.id, batteryId: nextId, path: nextPath })
+          return
+        }
+
+        stack.push({ nodeId: nextId, path: nextPath, visited: nextVisited })
+      })
+    }
+  })
+
+  return paths
+}
+
+export const computeChargeSummary = (
+  schema: SchemaState,
+  registry: ComponentType[],
+): Map<string, ChargeSummary> => {
+  const typeById = new Map(registry.map((item) => [item.id, item]))
+  const incoming = new Map<string, string[]>()
+
+  schema.cables.forEach((cable) => {
+    const inc = incoming.get(cable.targetId) ?? []
+    inc.push(cable.sourceId)
+    incoming.set(cable.targetId, inc)
+  })
+  const outputById = computeChargeOutputs(schema, registry)
 
   const summaries = new Map<string, ChargeSummary>()
 

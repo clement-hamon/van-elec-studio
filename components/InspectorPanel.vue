@@ -1,37 +1,10 @@
 <template>
-  <div>
-    <div v-if="!selectedComponent && !selectedCable" class="empty-state">
-      Select a component or cable to edit its properties.
-    </div>
-
-    <div v-if="selectedIssues.length > 0" class="issue-panel">
-      <h3>Issues</h3>
-      <div v-for="issue in selectedIssues" :key="issue.id" class="issue-row">
-        <span class="issue-tag" :class="issue.level === 'error' ? 'issue-error' : 'issue-warning'">
-          {{ issue.level }}
-        </span>
-        <div class="issue-text">
-          <div>{{ issue.message }}</div>
-          <div v-if="issue.suggestion" class="issue-suggestion">
-            {{ issue.suggestion }}
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <template v-if="selectedComponent">
+  <div class="inspector-panel">
+    <section v-if="selectedComponent" class="inspector-section">
+      <div class="inspector-section-title">Properties</div>
       <div class="field">
         <label for="component-name">Name</label>
         <input id="component-name" v-model="componentName" type="text" >
-      </div>
-
-      <div v-if="showChargeSummary" class="field field-readonly">
-        <label>Charge Summary</label>
-        <div class="derived">
-          <div>Available current: {{ chargeAvailableA }} A</div>
-          <div>Effective current: {{ chargeEffectiveA }} A</div>
-          <div>Time to full: {{ chargeTimeToFull }}</div>
-        </div>
       </div>
 
       <div v-if="componentFields.length === 0" class="empty-state">
@@ -70,9 +43,21 @@
           </option>
         </select>
       </div>
-    </template>
+    </section>
 
-    <template v-if="selectedCable">
+    <section v-if="showChargeSummary" class="inspector-section">
+      <div class="inspector-section-title">Charge Summary</div>
+      <div class="field field-readonly">
+        <div class="derived">
+          <div>Available current: {{ chargeAvailableA }} A</div>
+          <div>Effective current: {{ chargeEffectiveA }} A</div>
+          <div>Time to full: {{ chargeTimeToFull }}</div>
+        </div>
+      </div>
+    </section>
+
+    <section v-if="selectedCable" class="inspector-section">
+      <div class="inspector-section-title">Cable</div>
       <div class="field">
         <label for="cable-name">Cable Name</label>
         <input id="cable-name" v-model="cableName" type="text" >
@@ -99,7 +84,27 @@
           <div>Voltage drop: {{ cableVoltageDrop }} V</div>
         </div>
       </div>
-    </template>
+    </section>
+
+    <section v-if="selectedIssues.length > 0" class="inspector-section">
+      <div class="inspector-section-title">Issues</div>
+      <div class="inspector-issues">
+        <div v-for="issue in selectedIssues" :key="issue.id" class="issue-row">
+          <span
+            class="issue-tag"
+            :class="issue.level === 'error' ? 'issue-error' : 'issue-warning'"
+          >
+            {{ issue.level }}
+          </span>
+          <div class="issue-text">
+            <div>{{ issue.message }}</div>
+            <div v-if="issue.suggestion" class="issue-suggestion">
+              {{ issue.suggestion }}
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
   </div>
 </template>
 
@@ -152,25 +157,6 @@ const componentFieldValue = (field: ComponentFieldDefinition) => {
   return value
 }
 
-const chargeAvailableA = computed(() => {
-  const value = selectedComponent.value?.derived?.chargeAvailableA
-  if (typeof value === 'number') return value.toFixed(1)
-  return '0.0'
-})
-
-const chargeEffectiveA = computed(() => {
-  const value = selectedComponent.value?.derived?.chargeEffectiveA
-  if (typeof value === 'number') return value.toFixed(1)
-  return '0.0'
-})
-
-const chargeTimeToFull = computed(() => {
-  const value = selectedComponent.value?.derived?.timeToFullH
-  if (typeof value === 'number') return `${value.toFixed(1)} h`
-  if (typeof value === 'string') return value
-  return 'n/a'
-})
-
 const coerceFieldValue = (field: ComponentFieldDefinition, rawValue: string) => {
   if (field.type === 'number') {
     if (rawValue === '') return null
@@ -198,6 +184,25 @@ const onComponentFieldInput = (field: ComponentFieldDefinition, event: Event) =>
     props: { ...selectedComponent.value.props, [field.key]: value },
   })
 }
+
+const chargeAvailableA = computed(() => {
+  const value = selectedComponent.value?.derived?.chargeAvailableA
+  if (typeof value === 'number') return value.toFixed(1)
+  return '0.0'
+})
+
+const chargeEffectiveA = computed(() => {
+  const value = selectedComponent.value?.derived?.chargeEffectiveA
+  if (typeof value === 'number') return value.toFixed(1)
+  return '0.0'
+})
+
+const chargeTimeToFull = computed(() => {
+  const value = selectedComponent.value?.derived?.timeToFullH
+  if (typeof value === 'number') return `${value.toFixed(1)} h`
+  if (typeof value === 'string') return value
+  return 'n/a'
+})
 
 const cableName = computed({
   get: () => selectedCable.value?.name ?? '',
