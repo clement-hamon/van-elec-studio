@@ -35,6 +35,28 @@ const applyCableDerived = (schema: SchemaState, registry: ComponentType[]): Sche
   const chargeOutputs = computeChargeOutputs(schema, registry)
   const componentById = new Map(schema.components.map((component) => [component.id, component]))
   const typeById = new Map(registry.map((type) => [type.id, type]))
+  const batteryScaleById = new Map<string, number>()
+
+  schema.components.forEach((component) => {
+    const type = typeById.get(component.typeId)
+    const isBattery = type?.chargePathRole === 'battery' || type?.id === 'battery'
+    if (!isBattery) return
+
+    const limit =
+      typeof component.props.maxChargeCurrentA === 'number' && component.props.maxChargeCurrentA > 0
+        ? component.props.maxChargeCurrentA
+        : null
+    if (!limit) return
+
+    const incomingCables = schema.cables.filter((cable) => cable.targetId === component.id)
+    const totalIncoming = incomingCables.reduce(
+      (sum, cable) => sum + (chargeOutputs.get(cable.sourceId) ?? 0),
+      0,
+    )
+    if (totalIncoming <= 0 || totalIncoming <= limit) return
+
+    batteryScaleById.set(component.id, limit / totalIncoming)
+  })
 
   return {
     ...schema,
@@ -48,7 +70,8 @@ const applyCableDerived = (schema: SchemaState, registry: ComponentType[]): Sche
       const isBattery = targetType?.chargePathRole === 'battery' || targetType?.id === 'battery'
       if (!isBattery) return buildCable(cable, powerInfo)
 
-      const chargeCurrent = chargeOutputs.get(cable.sourceId) ?? 0
+      const scale = batteryScaleById.get(cable.targetId) ?? 1
+      const chargeCurrent = (chargeOutputs.get(cable.sourceId) ?? 0) * scale
       if (chargeCurrent <= 0) return buildCable(cable, powerInfo)
 
       const source = componentById.get(cable.sourceId)

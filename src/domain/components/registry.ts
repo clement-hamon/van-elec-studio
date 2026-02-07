@@ -1,6 +1,7 @@
 import type { ComponentType } from '~/types/schema'
 import {
   fieldCapacityAh,
+  fieldMaxChargeCurrentA,
   fieldContinuousW,
   fieldControllerType,
   fieldCurrentA,
@@ -29,7 +30,7 @@ export const componentRegistry: ComponentType[] = [
     energyRole: 'storage',
     chargePathRole: 'battery',
     defaultProps: { voltage: 12, operatingVoltage: 12, capacityAh: 200 },
-    fields: [fieldVoltage, fieldOperatingVoltage, fieldCapacityAh],
+    fields: [fieldVoltage, fieldOperatingVoltage, fieldCapacityAh, fieldMaxChargeCurrentA],
     ports: [
       { id: 'positive', label: '+', direction: 'out', domain: 'dc', maxCurrent: 200 },
       { id: 'negative', label: '-', direction: 'out', domain: 'dc', maxCurrent: 200 },

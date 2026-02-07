@@ -21,6 +21,13 @@ export const fieldCapacityAh: ComponentFieldDefinition = {
   step: 1,
 }
 
+export const fieldMaxChargeCurrentA: ComponentFieldDefinition = {
+  key: 'maxChargeCurrentA',
+  label: 'Max Charge Current (A)',
+  type: 'number',
+  step: 1,
+}
+
 export const fieldWatt: ComponentFieldDefinition = {
   key: 'watt',
   label: 'Power (W)',
