@@ -2,6 +2,8 @@ import { defineStore } from 'pinia'
 import { computeCableDerived } from '~/services/cable'
 import { computeCablePower } from '~/services/power-flow'
 import { runValidation } from '~/services/validation'
+import { computeChargeSummary } from '~/services/charging'
+import { componentRegistry } from '~/src/domain/components/registry'
 import type {
   Cable,
   ComponentInstance,
@@ -12,80 +14,6 @@ import type {
 } from '~/types/schema'
 
 const nowIso = () => new Date().toISOString()
-
-const componentRegistry: ComponentType[] = [
-  {
-    id: 'battery',
-    label: 'Battery',
-    category: 'storage',
-    defaultProps: { voltage: 12, operatingVoltage: 12, capacityAh: 200 },
-    ports: [
-      { id: 'positive', label: '+', direction: 'out', domain: 'dc', maxCurrent: 200 },
-      { id: 'negative', label: '-', direction: 'out', domain: 'dc', maxCurrent: 200 },
-    ],
-    constraints: { voltageDomain: '12V', maxCurrent: 200 },
-  },
-  {
-    id: 'fuse',
-    label: 'Fuse',
-    category: 'distribution',
-    defaultProps: { ratingA: 60, operatingVoltage: 32 },
-    ports: [
-      { id: 'in', label: 'In', direction: 'in', domain: 'dc', maxCurrent: 120 },
-      { id: 'out', label: 'Out', direction: 'out', domain: 'dc', maxCurrent: 120 },
-    ],
-    constraints: { voltageDomain: '12V', maxCurrent: 120 },
-  },
-  {
-    id: 'inverter',
-    label: 'Inverter',
-    category: 'conversion',
-    defaultProps: { inputVoltage: 12, outputVoltage: 230, operatingVoltage: 12, continuousW: 1000 },
-    ports: [
-      { id: 'dc-in', label: 'DC In', direction: 'in', domain: 'dc', maxCurrent: 120 },
-      { id: 'ac-out', label: 'AC Out', direction: 'out', domain: 'ac', maxCurrent: 10 },
-    ],
-    constraints: { voltageDomain: '12V', maxCurrent: 120 },
-  },
-  {
-    id: 'led-light',
-    label: 'LED Light',
-    category: 'load',
-    defaultProps: { operatingVoltage: 12, watt: 6, lumens: 500 },
-    ports: [{ id: 'dc-in', label: 'DC In', direction: 'in', domain: 'dc', maxCurrent: 2 }],
-    constraints: { voltageDomain: '12V', maxCurrent: 2 },
-  },
-  {
-    id: 'light-bar',
-    label: 'Light Bar',
-    category: 'load',
-    defaultProps: { operatingVoltage: 12, watt: 36, lumens: 3000 },
-    ports: [{ id: 'dc-in', label: 'DC In', direction: 'in', domain: 'dc', maxCurrent: 5 }],
-    constraints: { voltageDomain: '12V', maxCurrent: 5 },
-  },
-  {
-    id: 'custom-load',
-    label: 'Custom Load',
-    category: 'load',
-    defaultProps: { operatingVoltage: 12, watt: 50 },
-    ports: [{ id: 'dc-in', label: 'DC In', direction: 'in', domain: 'dc', maxCurrent: 10 }],
-    constraints: { voltageDomain: '12V', maxCurrent: 10 },
-  },
-  {
-    id: 'dc-bus',
-    label: 'DC Bus',
-    category: 'distribution',
-    defaultProps: { operatingVoltage: 12, maxBranches: 4 },
-    ports: [
-      { id: 'in', label: 'In', direction: 'in', domain: 'dc', maxCurrent: 200 },
-      { id: 'out-1', label: 'Out 1', direction: 'out', domain: 'dc', maxCurrent: 50 },
-      { id: 'out-2', label: 'Out 2', direction: 'out', domain: 'dc', maxCurrent: 50 },
-      { id: 'out-3', label: 'Out 3', direction: 'out', domain: 'dc', maxCurrent: 50 },
-      { id: 'out-4', label: 'Out 4', direction: 'out', domain: 'dc', maxCurrent: 50 },
-    ],
-    constraints: { voltageDomain: '12V', maxCurrent: 200 },
-  },
-]
 
 const makeId = (prefix: string) => `${prefix}-${Date.now()}-${Math.floor(Math.random() * 1000)}`
 
@@ -107,6 +35,28 @@ const applyCableDerived = (schema: SchemaState, registry: ComponentType[]): Sche
   return {
     ...schema,
     cables: schema.cables.map((cable) => buildCable(cable, powerMap.get(cable.id))),
+  }
+}
+
+const applyChargingDerived = (schema: SchemaState, registry: ComponentType[]): SchemaState => {
+  const summaries = computeChargeSummary(schema, registry)
+  if (summaries.size === 0) return schema
+
+  return {
+    ...schema,
+    components: schema.components.map((component) => {
+      const summary = summaries.get(component.id)
+      if (!summary) return component
+      return {
+        ...component,
+        derived: {
+          ...component.derived,
+          chargeAvailableA: summary.availableCurrentA,
+          chargeEffectiveA: summary.effectiveCurrentA,
+          timeToFullH: summary.timeToFullHours ?? 'n/a',
+        },
+      }
+    }),
   }
 }
 
@@ -154,10 +104,13 @@ const defaultSchema = (): SchemaState => ({
 
 export const useSchemaStore = defineStore('schema', {
   state: () => {
-    const schema = applyCableDerived(defaultSchema(), componentRegistry)
+    const schema = applyChargingDerived(
+      applyCableDerived(defaultSchema(), componentRegistry),
+      componentRegistry,
+    )
     return {
       schema,
-      issues: runValidation(schema),
+      issues: runValidation(schema, componentRegistry),
       registry: componentRegistry,
     }
   },
@@ -198,11 +151,17 @@ export const useSchemaStore = defineStore('schema', {
       })
     },
     refreshValidation() {
-      this.schema = applyCableDerived(this.schema, this.registry)
-      this.issues = runValidation(this.schema)
+      this.schema = applyChargingDerived(
+        applyCableDerived(this.schema, this.registry),
+        this.registry,
+      )
+      this.issues = runValidation(this.schema, this.registry)
     },
     reset() {
-      this.schema = applyCableDerived(defaultSchema(), this.registry)
+      this.schema = applyChargingDerived(
+        applyCableDerived(defaultSchema(), this.registry),
+        this.registry,
+      )
       this.refreshValidation()
     },
     setSelection(payload: { componentId?: string; cableId?: string; groupId?: string }) {

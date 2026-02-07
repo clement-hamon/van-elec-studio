@@ -9,6 +9,7 @@ const getCircuitVoltage = (
 }
 
 const getOperatingVoltage = (props: Record<string, unknown>): number | null => {
+  if (typeof props.maxInputVoltage === 'number') return props.maxInputVoltage
   if (typeof props.operatingVoltage === 'number') return props.operatingVoltage
   if (typeof props.voltage === 'number') return props.voltage
   if (typeof props.inputVoltage === 'number') return props.inputVoltage
@@ -19,9 +20,14 @@ const getOperatingVoltage = (props: Record<string, unknown>): number | null => {
 export const operatingVoltageRule: Rule = {
   id: 'operating-voltage',
   description: 'Error when component operating voltage is below circuit voltage.',
-  run: ({ schema }) => {
+  run: ({ schema, registry }) => {
+    const typeById = new Map(registry.map((item) => [item.id, item]))
     return schema.components
       .map((component) => {
+        const type = typeById.get(component.typeId)
+        if (type?.energyRole === 'charger') return null
+        if (type?.chargePathRole === 'controller' || type?.chargePathRole === 'charger') return null
+
         const operatingVoltage = getOperatingVoltage(component.props)
         if (!operatingVoltage) return null
 
