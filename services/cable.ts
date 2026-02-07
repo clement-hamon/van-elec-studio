@@ -1,12 +1,11 @@
 import type { CableDerived, CableProps } from '~/types/schema'
 
 const COPPER_RESISTIVITY = 1.724e-8
-const ALUMINUM_RESISTIVITY = 2.82e-8
 
 const AWG_MIN = 0
 const AWG_MAX = 40
 
-const clampAwg = (awg: number) => Math.min(Math.max(Math.round(awg), AWG_MIN), AWG_MAX)
+export const clampAwg = (awg: number) => Math.min(Math.max(Math.round(awg), AWG_MIN), AWG_MAX)
 
 const awgToDiameterMeters = (awg: number) => {
   const awgValue = clampAwg(awg)
@@ -19,14 +18,15 @@ const awgToAreaMeters2 = (awg: number) => {
   return Math.PI * Math.pow(diameter / 2, 2)
 }
 
-const resistancePerMeter = (awg: number, material: CableProps['material']) => {
+export const awgToMm2 = (awg: number) => awgToAreaMeters2(awg) * 1_000_000
+
+export const resistancePerMeter = (awg: number) => {
   const area = awgToAreaMeters2(awg)
   if (area === 0) return 0
-  const rho = material === 'aluminum' ? ALUMINUM_RESISTIVITY : COPPER_RESISTIVITY
-  return rho / area
+  return COPPER_RESISTIVITY / area
 }
 
-const estimateAmpacity = (awg: number) => {
+export const estimateAmpacityForAwg = (awg: number) => {
   const lookup: Record<number, number> = {
     0: 150,
     1: 130,
@@ -51,12 +51,12 @@ export const computeCableDerived = (
   circuitVoltageV = 0,
 ): CableDerived => {
   const length = Math.max(0, props.lengthM)
-  const resistance = resistancePerMeter(props.gaugeAwg, props.material)
+  const resistance = resistancePerMeter(props.gaugeAwg)
   const loopResistance = resistance * length * 2
   const voltageDrop = loopResistance * expectedCurrentA
 
   return {
-    ampacityA: estimateAmpacity(props.gaugeAwg),
+    ampacityA: estimateAmpacityForAwg(props.gaugeAwg),
     expectedCurrentA,
     expectedPowerW,
     circuitVoltageV,
@@ -64,4 +64,34 @@ export const computeCableDerived = (
     loopResistanceOhm: loopResistance,
     voltageDropV: voltageDrop,
   }
+}
+
+const awgValues = Array.from({ length: AWG_MAX - AWG_MIN + 1 }, (_, i) => AWG_MIN + i)
+
+export const findRequiredAwgForCurrent = (currentA: number) => {
+  const current = Math.max(0, currentA)
+  for (let i = awgValues.length - 1; i >= 0; i -= 1) {
+    const awg = awgValues[i]
+    if (estimateAmpacityForAwg(awg) >= current) return awg
+  }
+  return AWG_MIN
+}
+
+export const voltageDropForAwg = (awg: number, lengthM: number, currentA: number) => {
+  const resistance = resistancePerMeter(awg)
+  return resistance * Math.max(0, lengthM) * 2 * Math.max(0, currentA)
+}
+
+export const findRequiredAwgForVoltageDrop = (
+  maxDropV: number,
+  lengthM: number,
+  currentA: number,
+) => {
+  const limit = Math.max(0, maxDropV)
+  for (let i = awgValues.length - 1; i >= 0; i -= 1) {
+    const awg = awgValues[i]
+    const drop = voltageDropForAwg(awg, lengthM, currentA)
+    if (drop <= limit) return awg
+  }
+  return AWG_MIN
 }

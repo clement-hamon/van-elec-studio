@@ -58,6 +58,24 @@
           Select a component or cable to edit its properties.
         </div>
 
+        <div v-if="selectedIssues.length > 0" class="issue-panel">
+          <h3>Issues</h3>
+          <div v-for="issue in selectedIssues" :key="issue.id" class="issue-row">
+            <span
+              class="issue-tag"
+              :class="issue.level === 'error' ? 'issue-error' : 'issue-warning'"
+            >
+              {{ issue.level }}
+            </span>
+            <div class="issue-text">
+              <div>{{ issue.message }}</div>
+              <div v-if="issue.suggestion" class="issue-suggestion">
+                {{ issue.suggestion }}
+              </div>
+            </div>
+          </div>
+        </div>
+
         <template v-if="selectedComponent">
           <div class="field">
             <label for="component-name">Name</label>
@@ -66,6 +84,15 @@
           <div v-if="componentVoltage !== null" class="field">
             <label for="voltage">Voltage (V)</label>
             <input id="voltage" v-model.number="componentVoltage" type="number" step="0.1" >
+          </div>
+          <div v-if="componentOperatingVoltage !== null" class="field">
+            <label for="operating-voltage">Operating Voltage (V)</label>
+            <input
+              id="operating-voltage"
+              v-model.number="componentOperatingVoltage"
+              type="number"
+              step="0.1"
+            >
           </div>
           <div v-if="componentCapacity !== null" class="field">
             <label for="capacity">Capacity (Ah)</label>
@@ -94,12 +121,9 @@
             <label for="gauge">Gauge (AWG)</label>
             <input id="gauge" v-model.number="cableGauge" type="number" step="1" >
           </div>
-          <div class="field">
-            <label for="material">Material</label>
-            <select id="material" v-model="cableMaterial">
-              <option value="copper">Copper</option>
-              <option value="aluminum">Aluminum</option>
-            </select>
+          <div class="field field-readonly">
+            <label>Gauge (mm²)</label>
+            <div class="derived">{{ cableGaugeMm2 }} mm²</div>
           </div>
           <div class="field field-readonly">
             <label>Derived</label>
@@ -144,6 +168,7 @@
 import { computed, ref } from 'vue'
 import { useSchemaStore } from '~/stores/schema'
 import CanvasStage from '~/components/CanvasStage.client.vue'
+import { awgToMm2 } from '~/services/cable'
 
 const schemaStore = useSchemaStore()
 
@@ -163,6 +188,17 @@ const onDragStart = (event: DragEvent, typeId: string) => {
 const selectedComponent = computed(() => schemaStore.selectedComponent)
 const selectedCable = computed(() => schemaStore.selectedCable)
 
+const selectedIssues = computed(() => {
+  const componentId = selectedComponent.value?.id
+  const cableId = selectedCable.value?.id
+  if (!componentId && !cableId) return []
+  return schemaStore.issues.filter((issue) => {
+    if (issue.targetType === 'component') return issue.targetId === componentId
+    if (issue.targetType === 'cable') return issue.targetId === cableId
+    return false
+  })
+})
+
 const componentName = computed({
   get: () => selectedComponent.value?.name ?? '',
   set: (value: string) => {
@@ -180,6 +216,19 @@ const componentVoltage = computed({
     if (!selectedComponent.value || value === null) return
     schemaStore.updateComponent(selectedComponent.value.id, {
       props: { ...selectedComponent.value.props, voltage: value },
+    })
+  },
+})
+
+const componentOperatingVoltage = computed({
+  get: () => {
+    const operatingVoltage = selectedComponent.value?.props.operatingVoltage
+    return typeof operatingVoltage === 'number' ? operatingVoltage : null
+  },
+  set: (value: number | null) => {
+    if (!selectedComponent.value || value === null) return
+    schemaStore.updateComponent(selectedComponent.value.id, {
+      props: { ...selectedComponent.value.props, operatingVoltage: value },
     })
   },
 })
@@ -251,14 +300,9 @@ const cableGauge = computed({
   },
 })
 
-const cableMaterial = computed({
-  get: () => selectedCable.value?.props.material ?? 'copper',
-  set: (value: 'copper' | 'aluminum') => {
-    if (!selectedCable.value) return
-    schemaStore.updateCable(selectedCable.value.id, {
-      props: { ...selectedCable.value.props, material: value },
-    })
-  },
+const cableGaugeMm2 = computed(() => {
+  if (!selectedCable.value) return '0.00'
+  return awgToMm2(selectedCable.value.props.gaugeAwg).toFixed(2)
 })
 
 const cableExpectedCurrent = computed(() =>

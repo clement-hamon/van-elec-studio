@@ -34,9 +34,26 @@ let keydownHandler: ((event: KeyboardEvent) => void) | null = null
 
 const nodeMap = new Map<string, Konva.Group>()
 const lineMap = new Map<string, Konva.Line>()
+const cableBadgeMap = new Map<string, Konva.Circle>()
 
 const nodeWidth = 160
 const nodeHeight = 90
+
+const issueColor = (level: 'warning' | 'error') => (level === 'error' ? '#e07a5f' : '#f2b46d')
+
+const buildIssueMaps = () => {
+  const componentIssues = new Map<string, 'warning' | 'error'>()
+  const cableIssues = new Map<string, 'warning' | 'error'>()
+
+  schemaStore.issues.forEach((issue) => {
+    const targetMap = issue.targetType === 'cable' ? cableIssues : componentIssues
+    const current = targetMap.get(issue.targetId)
+    if (current === 'error') return
+    targetMap.set(issue.targetId, issue.level)
+  })
+
+  return { componentIssues, cableIssues }
+}
 
 const getDropPosition = (event: DragEvent) => {
   if (!container.value) return null
@@ -86,6 +103,14 @@ const syncCableLines = () => {
     const targetCenter = getNodeCenter(cable.targetId)
     if (!sourceCenter || !targetCenter) return
     line.points([sourceCenter.x, sourceCenter.y, targetCenter.x, targetCenter.y])
+
+    const badge = cableBadgeMap.get(cableId)
+    if (badge) {
+      badge.position({
+        x: (sourceCenter.x + targetCenter.x) / 2,
+        y: (sourceCenter.y + targetCenter.y) / 2,
+      })
+    }
   })
 }
 
@@ -107,6 +132,32 @@ const applySelection = () => {
     const isSelected = cableId === selectedCableId
     line.stroke(isSelected ? '#d96b3a' : '#2d2a25')
     line.strokeWidth(isSelected ? 3.5 : 2)
+  })
+}
+
+const applyIssueBadges = () => {
+  const { componentIssues, cableIssues } = buildIssueMaps()
+
+  nodeMap.forEach((node, nodeId) => {
+    const badge = node.findOne<Konva.Circle>('.issue-badge')
+    if (!badge) return
+    const level = componentIssues.get(nodeId)
+    if (!level) {
+      badge.visible(false)
+      return
+    }
+    badge.visible(true)
+    badge.fill(issueColor(level))
+  })
+
+  cableBadgeMap.forEach((badge, cableId) => {
+    const level = cableIssues.get(cableId)
+    if (!level) {
+      badge.visible(false)
+      return
+    }
+    badge.visible(true)
+    badge.fill(issueColor(level))
   })
 }
 
@@ -143,10 +194,65 @@ const ensureNode = (componentId: string) => {
     name: 'node-title',
   })
 
+  const badge = new Konva.Circle({
+    x: nodeWidth - 14,
+    y: 14,
+    radius: 6,
+    fill: '#f2b46d',
+    stroke: '#ffffff',
+    strokeWidth: 1,
+    visible: false,
+    name: 'issue-badge',
+  })
+
   group.add(rect)
   group.add(title)
+  group.add(badge)
 
-  const handleNodeClick = () => {
+  const connectionExists = (sourceId: string, targetId: string) =>
+    schemaStore.schema.cables.some(
+      (cable) =>
+        (cable.sourceId === sourceId && cable.targetId === targetId) ||
+        (cable.sourceId === targetId && cable.targetId === sourceId),
+    )
+
+  const createCable = (sourceId: string, targetId: string) => {
+    if (connectionExists(sourceId, targetId)) return null
+
+    const newCableId = `cable-${Date.now()}`
+    schemaStore.addCable({
+      id: newCableId,
+      name: `Cable ${sourceId} → ${targetId}`,
+      sourceId,
+      targetId,
+      props: { lengthM: 2, gaugeAwg: 8 },
+      derived: {
+        ampacityA: 0,
+        expectedCurrentA: 0,
+        expectedPowerW: 0,
+        circuitVoltageV: 0,
+        resistanceOhmPerM: 0,
+        loopResistanceOhm: 0,
+        voltageDropV: 0,
+      },
+    })
+    return newCableId
+  }
+
+  const handleNodeClick = (event: Konva.KonvaEventObject<MouseEvent>) => {
+    if (event.evt?.shiftKey) {
+      const selectedId = schemaStore.schema.selection.componentId
+      if (selectedId && selectedId !== componentId) {
+        const newCableId = createCable(selectedId, componentId)
+        if (newCableId) {
+          schemaStore.setSelection({ cableId: newCableId })
+        }
+      }
+      applySelection()
+      layer?.batchDraw()
+      return
+    }
+
     if (props.mode === 'connect') {
       if (!pendingSourceId.value) {
         pendingSourceId.value = componentId
@@ -160,24 +266,10 @@ const ensureNode = (componentId: string) => {
         return
       }
 
-      const newCableId = `cable-${Date.now()}`
-      schemaStore.addCable({
-        id: newCableId,
-        name: 'New Cable',
-        sourceId: pendingSourceId.value,
-        targetId: componentId,
-        props: { lengthM: 2, gaugeAwg: 8, material: 'copper' },
-        derived: {
-          ampacityA: 0,
-          expectedCurrentA: 0,
-          expectedPowerW: 0,
-          circuitVoltageV: 0,
-          resistanceOhmPerM: 0,
-          loopResistanceOhm: 0,
-          voltageDropV: 0,
-        },
-      })
-      schemaStore.setSelection({ cableId: newCableId })
+      const newCableId = createCable(pendingSourceId.value, componentId)
+      if (newCableId) {
+        schemaStore.setSelection({ cableId: newCableId })
+      }
       pendingSourceId.value = null
       applySelection()
       layer?.batchDraw()
@@ -191,7 +283,7 @@ const ensureNode = (componentId: string) => {
 
   group.on('click tap', (event) => {
     event.cancelBubble = true
-    handleNodeClick()
+    handleNodeClick(event)
   })
 
   group.on('dragmove', () => {
@@ -208,6 +300,24 @@ const ensureNode = (componentId: string) => {
   nodeMap.set(componentId, group)
   layer?.add(group)
   return group
+}
+
+const ensureCableBadge = (cableId: string) => {
+  const existing = cableBadgeMap.get(cableId)
+  if (existing) return existing
+
+  const badge = new Konva.Circle({
+    radius: 5,
+    fill: '#f2b46d',
+    stroke: '#ffffff',
+    strokeWidth: 1,
+    visible: false,
+  })
+
+  cableBadgeMap.set(cableId, badge)
+  layer?.add(badge)
+  badge.zIndex(2)
+  return badge
 }
 
 const ensureCable = (cableId: string) => {
@@ -250,12 +360,13 @@ const syncScene = () => {
     node.position({ x: component.position.x, y: component.position.y })
     const title = node.findOne<Konva.Text>('.node-title')
     if (title) title.text(component.name || component.id)
-    node.zIndex(2)
+    node.zIndex(3)
   })
 
   schemaStore.schema.cables.forEach((cable) => {
     const line = ensureCable(cable.id)
     line.zIndex(1)
+    ensureCableBadge(cable.id)
   })
 
   nodeMap.forEach((node, nodeId) => {
@@ -272,8 +383,16 @@ const syncScene = () => {
     }
   })
 
+  cableBadgeMap.forEach((badge, cableId) => {
+    if (!currentCableIds.has(cableId)) {
+      badge.destroy()
+      cableBadgeMap.delete(cableId)
+    }
+  })
+
   syncCableLines()
   applySelection()
+  applyIssueBadges()
   layer.batchDraw()
 }
 
@@ -329,6 +448,16 @@ const initStage = () => {
 watch(
   () => schemaStore.schema,
   () => syncScene(),
+  { deep: true },
+)
+
+watch(
+  () => schemaStore.issues,
+  () => {
+    if (!layer) return
+    applyIssueBadges()
+    layer.batchDraw()
+  },
   { deep: true },
 )
 

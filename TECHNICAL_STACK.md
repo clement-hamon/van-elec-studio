@@ -46,7 +46,7 @@ The system is split into four main layers:
   A concrete component placed by the user. Holds its own editable properties and derived values.
 
 - **Cable**  
-  A connection between components with its own properties (length, gauge, material) and derived values (voltage drop, max current).
+  A connection between components with its own properties (length, gauge) and derived values (voltage drop, max current).
 
 - **Group / Subsystem**  
   A container for components that imposes inherited constraints (e.g., max voltage).

@@ -259,6 +259,37 @@ body {
   font-size: 0.8rem;
 }
 
+.issue-panel {
+  display: grid;
+  gap: 12px;
+  padding: 12px;
+  border-radius: 12px;
+  background: rgba(224, 122, 95, 0.08);
+  border: 1px solid rgba(224, 122, 95, 0.2);
+}
+
+.issue-panel h3 {
+  margin: 0;
+  font-size: 0.9rem;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: #6a4b3b;
+}
+
+.issue-row {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 10px;
+  align-items: start;
+}
+
+.issue-text {
+  display: grid;
+  gap: 4px;
+  font-size: 0.85rem;
+  color: #2d2a25;
+}
+
 @media (max-width: 960px) {
   .workspace {
     grid-template-columns: 1fr;

@@ -47,7 +47,6 @@ export type Cable = {
 export type CableProps = {
   lengthM: number
   gaugeAwg: number
-  material: 'copper' | 'aluminum'
 }
 
 export type CableDerived = {
