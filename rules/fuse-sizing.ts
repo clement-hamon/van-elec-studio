@@ -5,7 +5,7 @@ import type { Cable } from '~/types/schema'
 export const fuseSizingRule: Rule = {
   id: 'fuse-sizing',
   description: 'Check that fuse rating is between expected current and cable ampacity.',
-  run: ({ schema }) => {
+  run: ({ schema, graph }) => {
     const fuseIds = schema.components
       .filter((component) => component.typeId === 'fuse')
       .map((component) => component.id)
@@ -16,7 +16,7 @@ export const fuseSizingRule: Rule = {
       const fuse = schema.components.find((component) => component.id === fuseId)
       const rating = Number(fuse?.props.ratingA ?? 0)
 
-      const outgoing = schema.cables.filter((cable) => cable.sourceId === fuseId)
+      const outgoing = graph.edges.filter((cable) => cable.sourceId === fuseId)
       if (outgoing.length === 0) {
         issues.push(
           warning({

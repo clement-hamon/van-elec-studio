@@ -1,7 +1,7 @@
 export default defineNuxtConfig({
   srcDir: '.',
   components: [{ path: 'components', pathPrefix: false }],
-  modules: ['@pinia/nuxt'],
+  modules: ['@pinia/nuxt', '@nuxt/eslint'],
   app: {
     baseURL: process.env.NUXT_APP_BASE_URL || '/',
   },

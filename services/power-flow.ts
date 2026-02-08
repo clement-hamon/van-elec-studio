@@ -6,14 +6,14 @@ type CablePowerInfo = {
   expectedCurrentA: number
 }
 
-const voltageFromDomain = (domain?: string) => {
+export const voltageFromDomain = (domain?: string) => {
   if (domain === '12V') return 12
   if (domain === '24V') return 24
   if (domain === '48V') return 48
   return null
 }
 
-const resolveComponentVoltage = (
+export const resolveComponentVoltage = (
   component: ComponentInstance | undefined,
   type: ComponentType | undefined,
 ): number => {

@@ -398,11 +398,17 @@ const syncScene = () => {
 
 const initStage = () => {
   if (!container.value) return
+  const width = container.value.clientWidth
+  const height = container.value.clientHeight
+  if (width === 0 || height === 0) {
+    requestAnimationFrame(() => initStage())
+    return
+  }
 
   stage = new Konva.Stage({
     container: container.value,
-    width: container.value.clientWidth,
-    height: container.value.clientHeight,
+    width,
+    height,
   })
 
   layer = new Konva.Layer()
