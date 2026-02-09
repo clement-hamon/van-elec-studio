@@ -4,7 +4,7 @@ import { computeCablePower } from '~/services/power-flow'
 import { runValidation } from '~/services/validation'
 import { computeChargeSummary } from '~/services/charging'
 import { componentRegistry } from '~/src/domain/components/registry'
-import { loadSchema, saveSchema } from '~/services/storage'
+import { getHistoryDepth, loadSchema, saveSchema, undoSchema } from '~/services/storage'
 import type {
   Cable,
   ComponentInstance,
@@ -202,6 +202,7 @@ export const useSchemaStore = defineStore('schema', {
       schema,
       issues: runValidation(schema, componentRegistry),
       registry: componentRegistry,
+      historyDepth: getHistoryDepth(),
     }
   },
   getters: {
@@ -252,6 +253,14 @@ export const useSchemaStore = defineStore('schema', {
     clearSchema() {
       this.schema = applyDerivedAll(emptySchema(), this.registry)
       this.refreshValidation()
+    },
+    undo() {
+      const previous = undoSchema()
+      if (!previous) return false
+      this.schema = applyDerivedAll(previous, this.registry)
+      this.issues = runValidation(this.schema, this.registry)
+      this.historyDepth = getHistoryDepth()
+      return true
     },
     setSelection(payload: { componentId?: string; cableId?: string; groupId?: string }) {
       this.schema.selection = payload
@@ -309,6 +318,7 @@ export const useSchemaStore = defineStore('schema', {
     },
     loadFromStorage() {
       const saved = loadSchema()
+      this.historyDepth = getHistoryDepth()
       if (!saved) return false
       this.schema = applyDerivedAll(saved, this.registry)
       this.issues = runValidation(this.schema, this.registry)
@@ -316,11 +326,13 @@ export const useSchemaStore = defineStore('schema', {
     },
     saveNow() {
       saveSchema(this.schema)
+      this.historyDepth = getHistoryDepth()
     },
     scheduleSave() {
       if (saveTimer) clearTimeout(saveTimer)
       saveTimer = setTimeout(() => {
         saveSchema(this.schema)
+        this.historyDepth = getHistoryDepth()
         saveTimer = null
       }, SAVE_DEBOUNCE_MS)
     },

@@ -6,6 +6,9 @@
         <span class="brand-name">Van Elec Studio</span>
       </div>
       <div class="topbar-actions">
+        <button class="btn btn-ghost" type="button" :disabled="!canUndo" @click="onUndo">
+          Undo
+        </button>
         <button class="btn btn-ghost" type="button" :disabled="isEmpty" @click="onReset">
           Reset
         </button>
@@ -23,6 +26,7 @@ const schemaStore = useSchemaStore()
 const isEmpty = computed(
   () => schemaStore.schema.components.length === 0 && schemaStore.schema.cables.length === 0,
 )
+const canUndo = computed(() => schemaStore.historyDepth > 0)
 
 const onReset = () => {
   if (
@@ -31,6 +35,10 @@ const onReset = () => {
     return
   }
   schemaStore.clearSchema()
+}
+
+const onUndo = () => {
+  schemaStore.undo()
 }
 
 onMounted(() => {

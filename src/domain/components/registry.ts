@@ -195,7 +195,7 @@ export const componentRegistry: ComponentType[] = [
     category: 'conversion',
     energyRole: 'charger',
     chargePathRole: 'charger',
-    defaultProps: { maxOutputCurrentA: 40, inputVoltage: 12, outputVoltage: 14.4 },
+    defaultProps: { maxOutputCurrentA: 40, inputVoltage: 17, outputVoltage: 12 },
     fields: [fieldMaxOutputCurrentA, fieldInputVoltage, fieldOutputVoltage],
     ports: [
       { id: 'dc-in', label: 'DC In', direction: 'in', domain: 'dc', maxCurrent: 60 },
