@@ -12,8 +12,17 @@ type CanvasNodesOptions = {
   onRequestSyncCables: () => void
 }
 
-const defaultNodeImageUrl = '/icons/mppt-icon.svg'
-const dcDcNodeImageUrl = '/icons/dc-dc-icon.svg'
+const defaultNodeImageUrl = '/icons/mppt.svg'
+const dcDcNodeImageUrl = '/icons/dc-dc.svg'
+const alternatorNodeImageUrl = '/icons/alternator.svg'
+const batteryNodeImageUrl = '/icons/battery.svg'
+// const solarPanelNodeImageUrl = '/icons/solar-panel.svg'
+// const inverterNodeImageUrl = '/icons/inverter.svg'
+const positiveBusNodeImageUrl = '/icons/positive-bus-bar.svg'
+const shoreInletNodeImageUrl = '/icons/shore-inlet.svg'
+const fuseNodeImageUrl = '/icons/fuse.svg'
+
+
 const nodeImageSize = { width: 64, height: 64 }
 const nodeImageOffset = {
   x: Math.round((NODE_WIDTH - nodeImageSize.width) / 2),
@@ -27,7 +36,15 @@ const nodeImageCache = new Map<string, HTMLImageElement>()
 
 const iconUrlForComponent = (component: ComponentInstance) => {
   if (component.typeId === 'dc-dc-charger') return dcDcNodeImageUrl
+  if (component.typeId === 'alternator') return alternatorNodeImageUrl
+  if (component.typeId === 'battery') return batteryNodeImageUrl
+  if (component.typeId === 'dc-bus') return positiveBusNodeImageUrl
+  if (component.typeId === 'shore-inlet') return shoreInletNodeImageUrl
+  if (component.typeId === 'fuse') return fuseNodeImageUrl
   return defaultNodeImageUrl
+  // if (component.typeId === 'solar-panel') return solarPanelNodeImageUrl
+  // if (component.typeId === 'inverter') return inverterNodeImageUrl
+  // return defaultNodeImageUrl
 }
 
 const ensureNodeImage = (layer: Konva.Layer, url: string) => {

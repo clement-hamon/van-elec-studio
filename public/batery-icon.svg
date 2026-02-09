@@ -1,0 +1,63 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 160" width="256" height="160" role="img" aria-label="Ultimatron LiFePO4 battery icon">
+
+  <!-- Shadow -->
+  <rect x="18" y="18" width="220" height="116" rx="10" fill="#000" opacity="0.08"></rect>
+
+  <!-- Battery body -->
+  <rect x="14" y="14" width="220" height="116" rx="10" fill="#111"></rect>
+
+  <!-- Top lid -->
+  <rect x="14" y="8" width="220" height="24" rx="6" fill="#1B1B1B"></rect>
+
+  <!-- Terminals -->
+  <g>
+    <rect x="52" y="4" width="12" height="8" rx="2" fill="#BDBDBD"></rect>
+    <rect x="192" y="4" width="12" height="8" rx="2" fill="#BDBDBD"></rect>
+    <circle cx="58" cy="4" r="2" fill="#8A8A8A"></circle>
+    <circle cx="198" cy="4" r="2" fill="#8A8A8A"></circle>
+  </g>
+
+  <!-- FULL bottom blue label -->
+  <rect x="14" y="48" width="220" height="82" rx="0 0 10 10" fill="#0B5FA5"></rect>
+
+  <!-- Brand (top-left on black area) -->
+  <g fill="#fff" opacity="0.9">
+    <circle cx="36" cy="34" r="5"></circle>
+    <rect x="44" y="30" width="60" height="8" rx="4"></rect>
+  </g>
+
+  <!-- Main label text blocks -->
+  <g fill="#fff">
+    <rect x="24" y="56" width="140" height="10" rx="5" opacity="0.95"></rect>
+    <rect x="24" y="70" width="160" height="8" rx="4" opacity="0.85"></rect>
+    <rect x="24" y="86" width="150" height="10" rx="5" opacity="0.95"></rect>
+  </g>
+
+  <!-- Molecular graphic -->
+  <g stroke="#fff" stroke-width="2" opacity="0.8">
+    <circle cx="174" cy="76" r="4" fill="#fff"></circle>
+    <circle cx="190" cy="64" r="4" fill="#fff"></circle>
+    <circle cx="204" cy="80" r="4" fill="#fff"></circle>
+    <circle cx="188" cy="96" r="4" fill="#fff"></circle>
+    <line x1="174" y1="76" x2="190" y2="64"></line>
+    <line x1="174" y1="76" x2="204" y2="80"></line>
+    <line x1="174" y1="76" x2="188" y2="96"></line>
+  </g>
+
+  <!-- QR code placeholder -->
+  <g fill="#fff" opacity="0.9">
+    <rect x="206" y="58" width="22" height="22" rx="2"></rect>
+    <rect x="210" y="62" width="6" height="6"></rect>
+    <rect x="220" y="62" width="4" height="4"></rect>
+    <rect x="210" y="72" width="4" height="4"></rect>
+    <rect x="218" y="70" width="8" height="8" opacity="0.4"></rect>
+  </g>
+
+  <!-- Certification icons (abstract) -->
+  <g fill="#fff" opacity="0.65">
+    <rect x="164" y="32" width="10" height="10" rx="2"></rect>
+    <rect x="178" y="32" width="10" height="10" rx="2"></rect>
+    <rect x="192" y="32" width="10" height="10" rx="2"></rect>
+  </g>
+
+</svg>

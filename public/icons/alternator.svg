@@ -1,0 +1,52 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 160" width="160" height="160" role="img" aria-label="Alternator icon">
+
+  <!-- Shadow -->
+  <circle cx="82" cy="86" r="62" fill="#000" opacity="0.08"></circle>
+
+  <!-- Outer housing -->
+  <circle cx="78" cy="82" r="62" fill="#B0B6BC"></circle>
+  <circle cx="78" cy="82" r="54" fill="#000" opacity="0.08"></circle>
+
+  <!-- Housing ribs -->
+  <g fill="#9AA1A8">
+    <rect x="74" y="20" width="8" height="124" rx="4"></rect>
+    <rect x="20" y="78" width="124" height="8" rx="4"></rect>
+    <rect x="36" y="36" width="8" height="92" rx="4" transform="rotate(-45 40 82)"></rect>
+    <rect x="36" y="36" width="8" height="92" rx="4" transform="rotate(45 40 82)"></rect>
+  </g>
+
+  <!-- Inner stator ring -->
+  <circle cx="78" cy="82" r="40" fill="#7F878E"></circle>
+  <circle cx="78" cy="82" r="34" fill="#000" opacity="0.15"></circle>
+
+  <!-- Vent holes -->
+  <g fill="#5F666D">
+    <circle cx="78" cy="42" r="4"></circle>
+    <circle cx="78" cy="122" r="4"></circle>
+    <circle cx="38" cy="82" r="4"></circle>
+    <circle cx="118" cy="82" r="4"></circle>
+    <circle cx="52" cy="56" r="4"></circle>
+    <circle cx="104" cy="56" r="4"></circle>
+    <circle cx="52" cy="108" r="4"></circle>
+    <circle cx="104" cy="108" r="4"></circle>
+  </g>
+
+  <!-- Rotor -->
+  <circle cx="78" cy="82" r="18" fill="#4B5056"></circle>
+
+  <!-- Shaft -->
+  <circle cx="78" cy="82" r="6" fill="#2A2E33"></circle>
+  <circle cx="78" cy="82" r="2" fill="#111"></circle>
+
+  <!-- Pulley -->
+  <g>
+    <circle cx="136" cy="82" r="14" fill="#3A3F45"></circle>
+    <circle cx="136" cy="82" r="9" fill="#000" opacity="0.25"></circle>
+    <circle cx="136" cy="82" r="4" fill="#1A1A1A"></circle>
+  </g>
+
+  <!-- Mounting ear -->
+  <rect x="8" y="72" width="16" height="20" rx="6" fill="#7F878E"></rect>
+  <circle cx="16" cy="82" r="4" fill="#4B5056"></circle>
+
+</svg>

@@ -1,0 +1,55 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 128" width="256" height="128" role="img" aria-label="Positive busbar icon">
+
+  <!-- Shadow -->
+  <rect x="18" y="38" width="220" height="56" rx="14" fill="#000" opacity="0.08"></rect>
+
+  <!-- Main busbar housing -->
+  <rect x="14" y="34" width="228" height="56" rx="14" fill="#D94B45"></rect>
+
+  <!-- Inner recess -->
+  <rect x="24" y="44" width="208" height="36" rx="10" fill="#000" opacity="0.10"></rect>
+
+  <!-- Copper/metal bar -->
+  <rect x="34" y="52" width="188" height="20" rx="8" fill="#B07B3A"></rect>
+  <rect x="34" y="52" width="188" height="20" rx="8" fill="#FFF" opacity="0.08"></rect>
+
+  <!-- Studs / terminals -->
+  <g>
+    <!-- studs -->
+    <g fill="#BDBDBD">
+      <circle cx="54" cy="62" r="8"></circle>
+      <circle cx="86" cy="62" r="8"></circle>
+      <circle cx="118" cy="62" r="8"></circle>
+      <circle cx="150" cy="62" r="8"></circle>
+      <circle cx="182" cy="62" r="8"></circle>
+      <circle cx="214" cy="62" r="8"></circle>
+    </g>
+
+    <!-- holes / nuts -->
+    <g fill="#6E6E6E" opacity="0.85">
+      <circle cx="54" cy="62" r="3.2"></circle>
+      <circle cx="86" cy="62" r="3.2"></circle>
+      <circle cx="118" cy="62" r="3.2"></circle>
+      <circle cx="150" cy="62" r="3.2"></circle>
+      <circle cx="182" cy="62" r="3.2"></circle>
+      <circle cx="214" cy="62" r="3.2"></circle>
+    </g>
+
+    <!-- subtle highlights -->
+    <g fill="#FFF" opacity="0.18">
+      <circle cx="51.5" cy="59.5" r="2.2"></circle>
+      <circle cx="83.5" cy="59.5" r="2.2"></circle>
+      <circle cx="115.5" cy="59.5" r="2.2"></circle>
+      <circle cx="147.5" cy="59.5" r="2.2"></circle>
+      <circle cx="179.5" cy="59.5" r="2.2"></circle>
+      <circle cx="211.5" cy="59.5" r="2.2"></circle>
+    </g>
+  </g>
+
+  <!-- Positive mark -->
+  <g fill="#fff" opacity="0.9">
+    <circle cx="32" cy="42" r="10" opacity="0.22"></circle>
+    <path d="M32 36.5c.8 0 1.5.7 1.5 1.5v3h3c.8 0 1.5.7 1.5 1.5S37.8 45 37 45h-3v3c0 .8-.7 1.5-1.5 1.5S30.5 48.8 30.5 48v-3h-3c-.8 0-1.5-.7-1.5-1.5s.7-1.5 1.5-1.5h3v-3c0-.8.7-1.5 1.5-1.5z"></path>
+  </g>
+
+</svg>
