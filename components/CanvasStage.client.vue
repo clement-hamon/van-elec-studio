@@ -88,8 +88,325 @@ const cableBadgeMap = new Map<string, Konva.Circle>()
 
 const nodeWidth = 160
 const nodeHeight = 90
+const nodeIconOffset = { x: 16, y: 48 }
+const iconStroke = '#2d2a25'
+const iconFill = '#f6f1e6'
+const iconAccent = '#4c7d6b'
 
 const issueColor = (level: 'warning' | 'error') => (level === 'error' ? '#e07a5f' : '#f2b46d')
+
+const buildNodeIcon = (typeId: string) => {
+  const group = new Konva.Group({
+    x: nodeIconOffset.x,
+    y: nodeIconOffset.y,
+    name: 'node-icon',
+    listening: false,
+  })
+
+  const addLine = (points: number[]) => {
+    group.add(
+      new Konva.Line({
+        points,
+        stroke: iconStroke,
+        strokeWidth: 1.4,
+        lineCap: 'round',
+        lineJoin: 'round',
+      }),
+    )
+  }
+
+  if (typeId === 'battery') {
+    group.add(
+      new Konva.Rect({
+        x: 0,
+        y: 5,
+        width: 28,
+        height: 14,
+        fill: iconFill,
+        stroke: iconStroke,
+        strokeWidth: 1.2,
+        cornerRadius: 2,
+      }),
+    )
+    group.add(
+      new Konva.Rect({
+        x: 2.5,
+        y: 7,
+        width: 16,
+        height: 10,
+        fill: iconAccent,
+        cornerRadius: 1,
+      }),
+    )
+    group.add(
+      new Konva.Rect({
+        x: 28,
+        y: 9,
+        width: 4,
+        height: 6,
+        fill: iconStroke,
+        cornerRadius: 1,
+      }),
+    )
+    return group
+  }
+
+  if (typeId === 'fuse') {
+    group.add(
+      new Konva.Rect({
+        x: 2,
+        y: 6,
+        width: 30,
+        height: 12,
+        fill: iconFill,
+        stroke: iconStroke,
+        strokeWidth: 1.2,
+        cornerRadius: 2,
+      }),
+    )
+    addLine([5, 12, 9, 8, 13, 16, 17, 8, 21, 16, 25, 8, 29, 12])
+    return group
+  }
+
+  if (typeId === 'inverter') {
+    group.add(
+      new Konva.Rect({
+        x: 2,
+        y: 4,
+        width: 30,
+        height: 16,
+        fill: iconFill,
+        stroke: iconStroke,
+        strokeWidth: 1.2,
+        cornerRadius: 3,
+      }),
+    )
+    addLine([6, 12, 9, 8, 12, 12, 15, 16, 18, 12, 21, 8, 24, 12, 27, 16])
+    return group
+  }
+
+  if (typeId === 'led-light') {
+    group.add(
+      new Konva.Circle({
+        x: 12,
+        y: 12,
+        radius: 6,
+        fill: iconFill,
+        stroke: iconStroke,
+        strokeWidth: 1.2,
+      }),
+    )
+    addLine([12, 2, 12, 5])
+    addLine([12, 19, 12, 22])
+    addLine([4, 12, 7, 12])
+    addLine([17, 12, 20, 12])
+    addLine([6, 6, 8, 8])
+    addLine([16, 6, 14, 8])
+    return group
+  }
+
+  if (typeId === 'light-bar') {
+    group.add(
+      new Konva.Rect({
+        x: 2,
+        y: 9,
+        width: 30,
+        height: 6,
+        fill: iconFill,
+        stroke: iconStroke,
+        strokeWidth: 1.2,
+        cornerRadius: 2,
+      }),
+    )
+    addLine([6, 17, 6, 20])
+    addLine([14, 17, 14, 20])
+    addLine([22, 17, 22, 20])
+    addLine([30, 17, 30, 20])
+    return group
+  }
+
+  if (typeId === 'custom-load') {
+    addLine([4, 12, 8, 8, 12, 16, 16, 8, 20, 16, 24, 8, 28, 12])
+    addLine([2, 12, 4, 12])
+    addLine([28, 12, 32, 12])
+    return group
+  }
+
+  if (typeId === 'dc-bus') {
+    group.add(
+      new Konva.Rect({
+        x: 4,
+        y: 10,
+        width: 28,
+        height: 4,
+        fill: iconStroke,
+        cornerRadius: 2,
+      }),
+    )
+    addLine([8, 14, 8, 20])
+    addLine([16, 14, 16, 20])
+    addLine([24, 14, 24, 20])
+    addLine([12, 8, 12, 10])
+    addLine([20, 8, 20, 10])
+    return group
+  }
+
+  if (typeId === 'solar-panel') {
+    group.add(
+      new Konva.Rect({
+        x: 4,
+        y: 8,
+        width: 26,
+        height: 12,
+        fill: iconFill,
+        stroke: iconStroke,
+        strokeWidth: 1.2,
+        cornerRadius: 2,
+      }),
+    )
+    addLine([12, 8, 12, 20])
+    addLine([20, 8, 20, 20])
+    addLine([4, 14, 30, 14])
+    group.add(
+      new Konva.Circle({
+        x: 8,
+        y: 4,
+        radius: 3,
+        fill: iconAccent,
+        stroke: iconStroke,
+        strokeWidth: 1,
+      }),
+    )
+    return group
+  }
+
+  if (typeId === 'charge-controller') {
+    group.add(
+      new Konva.Rect({
+        x: 4,
+        y: 6,
+        width: 26,
+        height: 14,
+        fill: iconFill,
+        stroke: iconStroke,
+        strokeWidth: 1.2,
+        cornerRadius: 3,
+      }),
+    )
+    group.add(
+      new Konva.Circle({
+        x: 12,
+        y: 13,
+        radius: 3,
+        fill: iconAccent,
+        stroke: iconStroke,
+        strokeWidth: 1,
+      }),
+    )
+    addLine([18, 13, 26, 13])
+    addLine([24, 11, 26, 13, 24, 15])
+    return group
+  }
+
+  if (typeId === 'alternator') {
+    group.add(
+      new Konva.Circle({
+        x: 14,
+        y: 12,
+        radius: 9,
+        fill: iconFill,
+        stroke: iconStroke,
+        strokeWidth: 1.2,
+      }),
+    )
+    addLine([8, 12, 10, 8, 12, 12, 14, 16, 16, 12, 18, 8, 20, 12])
+    return group
+  }
+
+  if (typeId === 'dc-dc-charger') {
+    group.add(
+      new Konva.Rect({
+        x: 2,
+        y: 8,
+        width: 10,
+        height: 8,
+        fill: iconFill,
+        stroke: iconStroke,
+        strokeWidth: 1.2,
+        cornerRadius: 2,
+      }),
+    )
+    group.add(
+      new Konva.Rect({
+        x: 22,
+        y: 8,
+        width: 10,
+        height: 8,
+        fill: iconFill,
+        stroke: iconStroke,
+        strokeWidth: 1.2,
+        cornerRadius: 2,
+      }),
+    )
+    addLine([12, 12, 22, 12])
+    addLine([20, 10, 22, 12, 20, 14])
+    return group
+  }
+
+  if (typeId === 'shore-inlet') {
+    group.add(
+      new Konva.Rect({
+        x: 8,
+        y: 6,
+        width: 18,
+        height: 14,
+        fill: iconFill,
+        stroke: iconStroke,
+        strokeWidth: 1.2,
+        cornerRadius: 3,
+      }),
+    )
+    addLine([13, 9, 13, 16])
+    addLine([19, 9, 19, 16])
+    return group
+  }
+
+  if (typeId === 'ac-dc-charger') {
+    group.add(
+      new Konva.Rect({
+        x: 2,
+        y: 4,
+        width: 30,
+        height: 16,
+        fill: iconFill,
+        stroke: iconStroke,
+        strokeWidth: 1.2,
+        cornerRadius: 3,
+      }),
+    )
+    addLine([6, 12, 8, 8, 10, 12, 12, 16, 14, 12])
+    addLine([18, 10, 26, 10])
+    addLine([18, 14, 26, 14])
+    return group
+  }
+
+  return null
+}
+
+const updateNodeIcon = (node: Konva.Group, typeId: string) => {
+  const existing = node.findOne<Konva.Group>('.node-icon')
+  const currentTypeId = node.getAttr('iconTypeId')
+  if (currentTypeId === typeId && existing) return
+  if (existing) existing.destroy()
+
+  const icon = buildNodeIcon(typeId)
+  if (icon) {
+    node.add(icon)
+    icon.zIndex(1)
+  }
+
+  node.setAttr('iconTypeId', typeId)
+}
 
 const buildIssueMaps = () => {
   const componentIssues = new Map<string, 'warning' | 'error'>()
@@ -415,6 +732,7 @@ const syncScene = () => {
     node.position({ x: component.position.x, y: component.position.y })
     const title = node.findOne<Konva.Text>('.node-title')
     if (title) title.text(component.name || component.id)
+    updateNodeIcon(node, component.typeId)
     node.zIndex(3)
   })
 
