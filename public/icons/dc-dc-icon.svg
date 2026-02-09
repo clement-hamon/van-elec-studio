@@ -1,0 +1,114 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256" role="img" aria-label="Victron Orion-Tr Smart DC/DC charger icon">
+  <!-- Shadow -->
+  <rect x="16" y="34" width="224" height="168" rx="22" fill="#000" opacity="0.08"></rect>
+
+  <!-- Side heatsink rails (back plates) -->
+  <rect x="8" y="54" width="22" height="128" rx="6" fill="#1B1B1B" opacity="0.85"></rect>
+  <rect x="226" y="54" width="22" height="128" rx="6" fill="#1B1B1B" opacity="0.85"></rect>
+
+  <!-- Rail bolts -->
+  <g fill="#0A0A0A" opacity="0.55">
+    <circle cx="19" cy="66" r="4"></circle><circle cx="19" cy="104" r="4"></circle><circle cx="19" cy="142" r="4"></circle><circle cx="19" cy="180" r="4"></circle>
+    <circle cx="237" cy="66" r="4"></circle><circle cx="237" cy="104" r="4"></circle><circle cx="237" cy="142" r="4"></circle><circle cx="237" cy="180" r="4"></circle>
+  </g>
+
+  <!-- Main housing -->
+  <rect x="22" y="44" width="212" height="160" rx="22" fill="#2F86C8"></rect>
+
+  <!-- Subtle inner shading / ribs -->
+  <rect x="32" y="54" width="192" height="140" rx="18" fill="#000" opacity="0.05"></rect>
+  <rect x="40" y="54" width="8" height="140" rx="4" fill="#000" opacity="0.08"></rect>
+  <rect x="208" y="54" width="8" height="140" rx="4" fill="#000" opacity="0.08"></rect>
+
+  <!-- Top-left "glow" indicator -->
+  <circle cx="46" cy="68" r="7" fill="#8FE7FF" opacity="0.9"></circle>
+  <circle cx="46" cy="68" r="14" fill="#8FE7FF" opacity="0.14"></circle>
+
+  <!-- Small Bluetooth mark (abstract) -->
+  <g fill="#fff" opacity="0.45">
+    <circle cx="52" cy="92" r="7.5" opacity="0.18"></circle>
+    <path d="M52 86l4 4-4 4 4 4-4 4v-8l-3 3v-2l3-3-3-3v-2l3 3v-8z" opacity="0.55"></path>
+  </g>
+
+  <!-- Branding / product text as blocks (sheet-style, non-literal) -->
+  <rect x="78" y="58" width="80" height="8" rx="4" fill="#fff" opacity="0.20"></rect>
+  <rect x="78" y="74" width="110" height="18" rx="9" fill="#fff" opacity="0.36"></rect>
+  <rect x="78" y="102" width="130" height="12" rx="6" fill="#fff" opacity="0.24"></rect>
+
+  <!-- Orange stripe -->
+  <rect x="78" y="120" width="132" height="10" rx="5" fill="#F06A1A"></rect>
+
+  <!-- Compliance icons row (abstract blocks) -->
+  <g fill="#fff" opacity="0.22">
+    <rect x="78" y="136" width="20" height="14" rx="3"></rect>
+    <rect x="104" y="136" width="20" height="14" rx="3"></rect>
+    <rect x="130" y="136" width="20" height="14" rx="3"></rect>
+    <rect x="156" y="136" width="28" height="14" rx="3"></rect>
+  </g>
+
+  <!-- QR code placeholder -->
+  <g opacity="0.22" fill="#fff">
+    <rect x="198" y="134" width="22" height="22" rx="3"></rect>
+    <rect x="202" y="138" width="6" height="6"></rect>
+    <rect x="212" y="138" width="4" height="4"></rect>
+    <rect x="202" y="148" width="4" height="4"></rect>
+    <rect x="210" y="146" width="8" height="8" opacity="0.35"></rect>
+  </g>
+
+  <!-- Specification lines -->
+  <g fill="#fff" opacity="0.22">
+    <rect x="78" y="158" width="142" height="4" rx="2"></rect>
+    <rect x="150" y="168" width="70" height="4" rx="2"></rect>
+    <rect x="150" y="178" width="64" height="4" rx="2"></rect>
+    <rect x="150" y="188" width="86" height="4" rx="2"></rect>
+  </g>
+
+  <!-- Terminal block (bottom center, black) -->
+  <rect x="92" y="184" width="108" height="44" rx="14" fill="#161616" opacity="0.92"></rect>
+  <rect x="100" y="192" width="92" height="28" rx="10" fill="#000" opacity="0.18"></rect>
+
+  <!-- Screw terminals (4) -->
+  <g>
+    <g fill="#2A2A2A" opacity="0.95">
+      <circle cx="112" cy="206" r="7.3"></circle>
+      <circle cx="132" cy="206" r="7.3"></circle>
+      <circle cx="152" cy="206" r="7.3"></circle>
+      <circle cx="172" cy="206" r="7.3"></circle>
+    </g>
+    <g stroke="#000" opacity="0.35" stroke-width="1.6" stroke-linecap="round">
+      <line x1="107" y1="206" x2="117" y2="206"></line>
+      <line x1="127" y1="206" x2="137" y2="206"></line>
+      <line x1="147" y1="206" x2="157" y2="206"></line>
+      <line x1="167" y1="206" x2="177" y2="206"></line>
+    </g>
+  </g>
+
+  <!-- Input/Output labels -->
+  <g fill="#fff" opacity="0.55" font-family="Arial, Helvetica, sans-serif" font-size="8" font-weight="700">
+    <text x="104" y="190">INPUT</text>
+    <text x="150" y="190">OUTPUT</text>
+  </g>
+
+  <!-- +/- marks under screws -->
+  <g fill="#fff" opacity="0.55" font-family="Arial, Helvetica, sans-serif" font-size="10" font-weight="700">
+    <text x="109" y="225">+</text>
+    <text x="129" y="225">−</text>
+    <text x="149" y="225">−</text>
+    <text x="169" y="225">+</text>
+  </g>
+
+  <!-- Small green plug at bottom-left -->
+  <g>
+    <rect x="70" y="214" width="22" height="16" rx="3" fill="#2FAF59"></rect>
+    <rect x="73" y="217" width="7" height="6" rx="1.5" fill="#1A6E37" opacity="0.65"></rect>
+    <rect x="82" y="217" width="7" height="6" rx="1.5" fill="#1A6E37" opacity="0.65"></rect>
+    <path d="M78 230c0 6 8 6 8 0v-4c0-2-2-3-4-3s-4 1-4 3v4z" fill="#0A0A0A" opacity="0.55"></path>
+  </g>
+
+  <!-- On/Off LED bottom-right -->
+  <g>
+    <circle cx="210" cy="186" r="7.2" fill="#4CE36B" opacity="0.9"></circle>
+    <circle cx="210" cy="186" r="14" fill="#4CE36B" opacity="0.12"></circle>
+    <rect x="196" y="172" width="24" height="6" rx="3" fill="#fff" opacity="0.18"></rect>
+  </g>
+</svg>
