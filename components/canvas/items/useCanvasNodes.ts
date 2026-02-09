@@ -2,7 +2,7 @@ import Konva from 'konva'
 import type { Ref } from 'vue'
 import type { useSchemaStore } from '~/stores/schema'
 import type { ComponentInstance } from '~/types/schema'
-import { NODE_HEIGHT, NODE_WIDTH, type CanvasMode } from './constants'
+import { NODE_HEIGHT, NODE_SCALE, NODE_WIDTH, type CanvasMode } from './constants'
 
 type CanvasNodesOptions = {
   layer: Konva.Layer
@@ -16,21 +16,25 @@ const defaultNodeImageUrl = '/icons/mppt.svg'
 const dcDcNodeImageUrl = '/icons/dc-dc.svg'
 const alternatorNodeImageUrl = '/icons/alternator.svg'
 const batteryNodeImageUrl = '/icons/battery.svg'
-// const solarPanelNodeImageUrl = '/icons/solar-panel.svg'
-// const inverterNodeImageUrl = '/icons/inverter.svg'
+const solarPanelNodeImageUrl = '/icons/solar-panel.svg'
+const ledBarNodeImageUrl = '/icons/led-bar.svg'
 const positiveBusNodeImageUrl = '/icons/positive-bus-bar.svg'
 const shoreInletNodeImageUrl = '/icons/shore-inlet.svg'
 const fuseNodeImageUrl = '/icons/fuse.svg'
+const acDcChargerNodeImageUrl = '/icons/ac-dc-charger.svg'
+const ledLightNodeImageUrl = '/icons/led-light.svg'
 
-
-const nodeImageSize = { width: 64, height: 64 }
+const nodeImageSize = {
+  width: Math.round(64 * NODE_SCALE),
+  height: Math.round(64 * NODE_SCALE),
+}
 const nodeImageOffset = {
   x: Math.round((NODE_WIDTH - nodeImageSize.width) / 2),
-  y: 6,
+  y: Math.round(6 * NODE_SCALE),
 }
 const nodeTitleY = nodeImageOffset.y + nodeImageSize.height + 2
-const nodeTitleFontSize = 13
-const nodeHaloRadius = nodeImageSize.width / 2 + 10
+const nodeTitleFontSize = Math.round(13 * NODE_SCALE)
+const nodeHaloRadius = nodeImageSize.width / 2 + Math.round(10 * NODE_SCALE)
 
 const nodeImageCache = new Map<string, HTMLImageElement>()
 
@@ -40,11 +44,13 @@ const iconUrlForComponent = (component: ComponentInstance) => {
   if (component.typeId === 'battery') return batteryNodeImageUrl
   if (component.typeId === 'dc-bus') return positiveBusNodeImageUrl
   if (component.typeId === 'shore-inlet') return shoreInletNodeImageUrl
+  if (component.typeId === 'solar-panel') return solarPanelNodeImageUrl
   if (component.typeId === 'fuse') return fuseNodeImageUrl
+  if (component.typeId === 'ac-dc-charger') return acDcChargerNodeImageUrl
+  if (component.typeId === 'led-light') return ledLightNodeImageUrl
+  if (component.typeId === 'light-bar') return ledBarNodeImageUrl
+
   return defaultNodeImageUrl
-  // if (component.typeId === 'solar-panel') return solarPanelNodeImageUrl
-  // if (component.typeId === 'inverter') return inverterNodeImageUrl
-  // return defaultNodeImageUrl
 }
 
 const ensureNodeImage = (layer: Konva.Layer, url: string) => {

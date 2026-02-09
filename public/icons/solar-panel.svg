@@ -1,0 +1,56 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 192" width="256" height="192" role="img" aria-label="Solar panel icon (black)">
+
+  <!-- Shadow -->
+  <path d="M58 44h152c8 0 14 6 14 14v92c0 8-6 14-14 14H58c-8 0-14-6-14-14V58c0-8 6-14 14-14z" fill="#000" opacity="0.12"></path>
+
+  <!-- Panel frame -->
+  <rect x="40" y="28" width="176" height="120" rx="14" fill="#1C1C1C"></rect>
+  <rect x="50" y="38" width="156" height="100" rx="10" fill="#000" opacity="0.35"></rect>
+
+  <!-- Panel glass -->
+  <rect x="52" y="40" width="152" height="96" rx="10" fill="#0E0E0E"></rect>
+  <!-- Subtle highlight -->
+  <path d="M64 44h116c10 0 18 8 18 18v6H52v-6c0-10 8-18 12-18z" fill="#FFF" opacity="0.05"></path>
+
+  <!-- Cell grid -->
+  <g stroke="#FFF" opacity="0.14" stroke-width="2">
+    <!-- verticals -->
+    <line x1="80" y1="40" x2="80" y2="136"></line>
+    <line x1="108" y1="40" x2="108" y2="136"></line>
+    <line x1="136" y1="40" x2="136" y2="136"></line>
+    <line x1="164" y1="40" x2="164" y2="136"></line>
+    <!-- horizontals -->
+    <line x1="52" y1="64" x2="204" y2="64"></line>
+    <line x1="52" y1="88" x2="204" y2="88"></line>
+    <line x1="52" y1="112" x2="204" y2="112"></line>
+  </g>
+
+  <!-- Busbars -->
+  <g stroke="#FFF" opacity="0.22" stroke-width="3" stroke-linecap="round">
+    <line x1="74" y1="44" x2="74" y2="132"></line>
+    <line x1="182" y1="44" x2="182" y2="132"></line>
+  </g>
+
+  <!-- Junction box -->
+  <rect x="114" y="146" width="28" height="14" rx="5" fill="#0B0B0B"></rect>
+  <rect x="118" y="150" width="20" height="6" rx="3" fill="#000" opacity="0.4"></rect>
+
+  <!-- Cables -->
+  <path d="M128 160c0 10-10 12-18 14" fill="none" stroke="#0B0B0B" stroke-width="4" stroke-linecap="round"></path>
+  <path d="M128 160c0 10 10 12 18 14" fill="none" stroke="#0B0B0B" stroke-width="4" stroke-linecap="round"></path>
+
+  <!-- Connectors -->
+  <g>
+    <rect x="98" y="172" width="16" height="8" rx="3" fill="#1A1A1A"></rect>
+    <rect x="142" y="172" width="16" height="8" rx="3" fill="#1A1A1A"></rect>
+    <rect x="101" y="174" width="10" height="4" rx="2" fill="#000" opacity="0.35"></rect>
+    <rect x="145" y="174" width="10" height="4" rx="2" fill="#000" opacity="0.35"></rect>
+  </g>
+
+  <!-- Stand feet -->
+  <g fill="#2A2A2A">
+    <rect x="54" y="148" width="24" height="8" rx="4"></rect>
+    <rect x="178" y="148" width="24" height="8" rx="4"></rect>
+  </g>
+
+</svg>

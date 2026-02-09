@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256" role="img" aria-label="Ceiling LED light icon (front view)">
+
+  <!-- Soft shadow -->
+  <circle cx="132" cy="136" r="96" fill="#000" opacity="0.08"></circle>
+
+  <!-- Warm glow -->
+  <circle cx="128" cy="128" r="108" fill="#FFD966" opacity="0.22"></circle>
+
+  <!-- Outer housing -->
+  <circle cx="128" cy="128" r="96" fill="#E6EAEE"></circle>
+  <circle cx="128" cy="128" r="88" fill="#000" opacity="0.06"></circle>
+
+  <!-- Diffuser -->
+  <circle cx="128" cy="128" r="78" fill="#FFF2B3"></circle>
+  <circle cx="128" cy="128" r="70" fill="#FFF8D6" opacity="0.85"></circle>
+
+  <!-- LED segments (abstract, subtle) -->
+  <g fill="#FFE066" opacity="0.9">
+    <rect x="112" y="96" width="12" height="24" rx="6"></rect>
+    <rect x="132" y="96" width="12" height="24" rx="6"></rect>
+    <rect x="96" y="120" width="24" height="12" rx="6"></rect>
+    <rect x="136" y="120" width="24" height="12" rx="6"></rect>
+  </g>
+
+  <!-- Mounting screw hints -->
+  <g fill="#B0B6BC">
+    <circle cx="128" cy="44" r="4"></circle>
+    <circle cx="128" cy="212" r="4"></circle>
+    <circle cx="44" cy="128" r="4"></circle>
+    <circle cx="212" cy="128" r="4"></circle>
+  </g>
+
+</svg>
