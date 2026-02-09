@@ -31,13 +31,9 @@
 
     <aside class="panel panel-right">
       <div class="panel-header">
-        <div v-if="inspectorTitle" class="inspector-header">
+        <div class="inspector-header">
           <h2>{{ inspectorTitle }}</h2>
           <p>{{ inspectorDescription }}</p>
-        </div>
-        <div v-else>
-          <h2>Inspector</h2>
-          <p>Select a component or cable to view details.</p>
         </div>
       </div>
       <div class="panel-body">
@@ -68,7 +64,7 @@ const inspectorTitle = computed(() => {
 
   if (selectedCable.value) return 'Cable'
 
-  return ''
+  return 'Schema Summary'
 })
 
 const inspectorDescription = computed(() => {
@@ -81,7 +77,7 @@ const inspectorDescription = computed(() => {
     return 'Edit cable properties and derived values.'
   }
 
-  return 'Set properties for the selected item.'
+  return 'Overview of cables in the current schema.'
 })
 
 const addComponent = (typeId: string) => {

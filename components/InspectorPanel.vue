@@ -1,5 +1,30 @@
 <template>
   <div class="inspector-panel">
+    <section v-if="showSchemaSummary" class="inspector-section inspector-summary">
+      <div class="inspector-section-title">Schema Summary</div>
+      <div class="summary-block">
+        <div class="summary-header">
+          <div class="summary-title">Cables</div>
+          <div class="summary-count">{{ schemaCables.length }}</div>
+        </div>
+        <div v-if="schemaCables.length === 0" class="empty-state">
+          No cables yet. Connect components to add one.
+        </div>
+        <div v-else class="summary-list">
+          <div v-for="cable in schemaCables" :key="cable.id" class="summary-card">
+            <div class="summary-meta">
+              <div class="summary-meta-item">
+                <span class="summary-meta-label">Length</span><span class="summary-meta-value">{{ formatCableLength(cable.props?.lengthM) }}</span>
+              </div>
+              <div class="summary-meta-item">
+                <span class="summary-meta-label">Gauge</span><span class="summary-meta-value">{{ formatCableGauge(cable.props?.gaugeAwg) }}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
     <section v-if="selectedComponent" class="inspector-section">
       <div class="inspector-section-title">Properties</div>
       <div class="field">
@@ -127,6 +152,8 @@ const schemaStore = useSchemaStore()
 
 const selectedComponent = computed(() => schemaStore.selectedComponent)
 const selectedCable = computed(() => schemaStore.selectedCable)
+const showSchemaSummary = computed(() => !selectedComponent.value && !selectedCable.value)
+const schemaCables = computed(() => schemaStore.schema.cables)
 
 const selectedIssues = computed(() => {
   const componentId = selectedComponent.value?.id
@@ -272,9 +299,99 @@ const swapCableDirection = () => {
     targetId: selectedCable.value.sourceId,
   })
 }
+
+const formatCableLength = (lengthM?: number) => {
+  if (typeof lengthM !== 'number' || !Number.isFinite(lengthM)) return '0.0 m'
+  return `${lengthM.toFixed(1)} m`
+}
+
+const formatCableGauge = (gaugeAwg?: number) => {
+  if (typeof gaugeAwg !== 'number' || !Number.isFinite(gaugeAwg)) return 'n/a'
+  return `${Math.round(gaugeAwg)} AWG`
+}
 </script>
 
 <style scoped>
+.inspector-summary {
+  gap: 12px;
+}
+
+.summary-block {
+  display: grid;
+  gap: 12px;
+}
+
+.summary-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.summary-title {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #2d2a25;
+}
+
+.summary-count {
+  border-radius: 999px;
+  padding: 4px 10px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  background: rgba(45, 42, 37, 0.08);
+  color: #5a554f;
+}
+
+.summary-list {
+  display: grid;
+  gap: 10px;
+}
+
+.summary-card {
+  display: grid;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(45, 42, 37, 0.12);
+  background: #fffaf2;
+}
+
+.summary-card-name {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #2d2a25;
+}
+
+.summary-meta {
+  display: grid;
+  grid-template-rows: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.summary-meta-item {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px;
+  background: rgba(45, 42, 37, 0.05);
+  border-radius: 10px;
+  padding: 8px 10px;
+}
+
+.summary-meta-label {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #6a635c;
+}
+
+.summary-meta-value {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #2d2a25;
+  font-variant-numeric: tabular-nums;
+}
+
 .swap-button {
   margin-top: 8px;
   border: 1px solid #2d2a25;
