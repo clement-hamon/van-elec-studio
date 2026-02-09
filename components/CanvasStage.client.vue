@@ -54,6 +54,7 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import Konva from 'konva'
 import { useSchemaStore } from '~/stores/schema'
+import type { ComponentInstance } from '~/types/schema'
 
 type Mode = 'select' | 'connect'
 
@@ -92,13 +93,37 @@ const nodeIconOffset = { x: 16, y: 48 }
 const iconStroke = '#2d2a25'
 const iconFill = '#f6f1e6'
 const iconAccent = '#4c7d6b'
+const mpptIconUrl = '/icons/mppt-icon.svg'
+const mpptIconSize = { width: 64, height: 64 }
+const mpptIconOffset = {
+  x: Math.round((nodeWidth - mpptIconSize.width) / 2),
+  y: 6,
+}
+const mpptTitleY = mpptIconOffset.y + mpptIconSize.height + 2
+const mpptTitleFontSize = 13
+const mpptHaloRadius = mpptIconSize.width / 2 + 10
+let mpptIconImage: HTMLImageElement | null = null
 
 const issueColor = (level: 'warning' | 'error') => (level === 'error' ? '#e07a5f' : '#f2b46d')
 
-const buildNodeIcon = (typeId: string) => {
+const isMpptController = (component: ComponentInstance) =>
+  component.typeId === 'charge-controller' && component.props?.controllerType === 'mppt'
+
+const ensureMpptIcon = () => {
+  if (mpptIconImage || typeof window === 'undefined') return
+  const image = new window.Image()
+  image.src = mpptIconUrl
+  image.onload = () => {
+    layer?.batchDraw()
+  }
+  mpptIconImage = image
+}
+
+const buildNodeIcon = (typeId: string, variant?: string) => {
+  const offset = variant === 'mppt' ? mpptIconOffset : nodeIconOffset
   const group = new Konva.Group({
-    x: nodeIconOffset.x,
-    y: nodeIconOffset.y,
+    x: offset.x,
+    y: offset.y,
     name: 'node-icon',
     listening: false,
   })
@@ -281,6 +306,21 @@ const buildNodeIcon = (typeId: string) => {
   }
 
   if (typeId === 'charge-controller') {
+    if (variant === 'mppt') {
+      ensureMpptIcon()
+      group.add(
+        new Konva.Image({
+          x: 0,
+          y: 0,
+          width: mpptIconSize.width,
+          height: mpptIconSize.height,
+          image: mpptIconImage ?? undefined,
+          opacity: 0.9,
+        }),
+      )
+      return group
+    }
+
     group.add(
       new Konva.Rect({
         x: 4,
@@ -393,19 +433,46 @@ const buildNodeIcon = (typeId: string) => {
   return null
 }
 
-const updateNodeIcon = (node: Konva.Group, typeId: string) => {
+const updateNodeIcon = (node: Konva.Group, typeId: string, variant?: string) => {
+  const iconKey = `${typeId}:${variant ?? 'default'}`
   const existing = node.findOne<Konva.Group>('.node-icon')
-  const currentTypeId = node.getAttr('iconTypeId')
-  if (currentTypeId === typeId && existing) return
+  const currentKey = node.getAttr('iconKey')
+  if (currentKey === iconKey && existing) return
   if (existing) existing.destroy()
 
-  const icon = buildNodeIcon(typeId)
+  const icon = buildNodeIcon(typeId, variant)
   if (icon) {
     node.add(icon)
     icon.zIndex(1)
   }
 
-  node.setAttr('iconTypeId', typeId)
+  node.setAttr('iconKey', iconKey)
+}
+
+const applyNodeLayout = (node: Konva.Group, isMppt: boolean) => {
+  const rect = node.findOne<Konva.Rect>('.node-rect')
+  const title = node.findOne<Konva.Text>('.node-title')
+  if (!rect || !title) return
+
+  if (isMppt) {
+    rect.fill('transparent')
+    rect.stroke('transparent')
+    rect.shadowOpacity(0)
+    title.position({ x: 0, y: mpptTitleY })
+    title.width(nodeWidth)
+    title.align('center')
+    title.fontSize(mpptTitleFontSize)
+  } else {
+    rect.fill('#f6f1e6')
+    rect.stroke('#2d2a25')
+    rect.shadowOpacity(0.15)
+    title.position({ x: 16, y: 20 })
+    title.width(nodeWidth - 32)
+    title.align('left')
+    title.fontSize(15)
+  }
+
+  node.setAttr('variant', isMppt ? 'mppt' : 'default')
 }
 
 const buildIssueMaps = () => {
@@ -493,11 +560,28 @@ const applySelection = () => {
 
   nodeMap.forEach((node, nodeId) => {
     const rect = node.findOne<Konva.Rect>('.node-rect')
+    const halo = node.findOne<Konva.Circle>('.node-halo')
     if (!rect) return
     const isSelected = nodeId === selectedComponentId
     const isPending = nodeId === pendingId
+    const variant = node.getAttr('variant')
+    if (variant === 'mppt') {
+      rect.stroke('transparent')
+      rect.shadowOpacity(0)
+      if (halo) {
+        const active = isSelected || isPending
+        halo.visible(active)
+        halo.stroke(isPending ? '#4c7d6b' : '#d96b3a')
+        halo.opacity(active ? 0.22 : 0)
+      }
+      return
+    }
+
     rect.stroke(isPending ? '#4c7d6b' : isSelected ? '#d96b3a' : '#2d2a25')
     rect.shadowOpacity(isSelected || isPending ? 0.3 : 0.15)
+    if (halo) {
+      halo.visible(false)
+    }
   })
 
   lineMap.forEach((line, cableId) => {
@@ -533,7 +617,8 @@ const applyIssueBadges = () => {
   })
 }
 
-const ensureNode = (componentId: string) => {
+const ensureNode = (component: ComponentInstance) => {
+  const componentId = component.id
   const existing = nodeMap.get(componentId)
   if (existing) return existing
 
@@ -541,6 +626,7 @@ const ensureNode = (componentId: string) => {
     draggable: true,
     id: componentId,
   })
+  const isMppt = isMpptController(component)
 
   const rect = new Konva.Rect({
     width: nodeWidth,
@@ -554,6 +640,18 @@ const ensureNode = (componentId: string) => {
     shadowOpacity: 0.15,
     shadowOffset: { x: 0, y: 6 },
     name: 'node-rect',
+  })
+
+  const halo = new Konva.Circle({
+    x: nodeWidth / 2,
+    y: mpptIconOffset.y + mpptIconSize.height / 2,
+    radius: mpptHaloRadius,
+    stroke: '#d96b3a',
+    strokeWidth: 2,
+    opacity: 0,
+    visible: false,
+    listening: false,
+    name: 'node-halo',
   })
 
   const title = new Konva.Text({
@@ -578,8 +676,11 @@ const ensureNode = (componentId: string) => {
   })
 
   group.add(rect)
+  group.add(halo)
   group.add(title)
   group.add(badge)
+  group.setAttr('variant', isMppt ? 'mppt' : 'default')
+  applyNodeLayout(group, isMppt)
 
   const connectionExists = (sourceId: string, targetId: string) =>
     schemaStore.schema.cables.some(
@@ -731,11 +832,14 @@ const syncScene = () => {
   const currentCableIds = new Set(schemaStore.schema.cables.map((cable) => cable.id))
 
   schemaStore.schema.components.forEach((component) => {
-    const node = ensureNode(component.id)
+    const node = ensureNode(component)
     node.position({ x: component.position.x, y: component.position.y })
     const title = node.findOne<Konva.Text>('.node-title')
     if (title) title.text(component.name || component.id)
-    updateNodeIcon(node, component.typeId)
+    const isMppt = isMpptController(component)
+    const iconVariant = isMppt ? 'mppt' : undefined
+    updateNodeIcon(node, component.typeId, iconVariant)
+    applyNodeLayout(node, isMppt)
     node.zIndex(3)
   })
 
@@ -844,6 +948,7 @@ const initStage = () => {
 
   resizeObserver.observe(container.value)
 
+  ensureMpptIcon()
   syncScene()
   registerKeyboardShortcuts()
 }
