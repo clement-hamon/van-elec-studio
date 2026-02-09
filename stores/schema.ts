@@ -112,6 +112,47 @@ const applyComponentDerived = (schema: SchemaState, registry: ComponentType[]): 
   }
 }
 
+const applyDefaultProps = (schema: SchemaState, registry: ComponentType[]): SchemaState => {
+  const typeById = new Map(registry.map((type) => [type.id, type]))
+  return {
+    ...schema,
+    components: schema.components.map((component) => {
+      const type = typeById.get(component.typeId)
+      if (!type) return component
+      const props = { ...component.props }
+      const isBattery = type.chargePathRole === 'battery' || type.id === 'battery'
+      if (isBattery) {
+        if (props.outputVoltage === undefined || props.outputVoltage === null) {
+          if (typeof props.voltage === 'number') {
+            props.outputVoltage = props.voltage
+          } else if (typeof props.operatingVoltage === 'number') {
+            props.outputVoltage = props.operatingVoltage
+          }
+        }
+        if (props.maxInputVoltage === undefined || props.maxInputVoltage === null) {
+          if (typeof props.chargeCutoffVoltage === 'number') {
+            props.maxInputVoltage = props.chargeCutoffVoltage
+          } else if (typeof props.recommendedChargeVoltage === 'number') {
+            props.maxInputVoltage = props.recommendedChargeVoltage
+          }
+        }
+        if ('voltage' in props) {
+          delete props.voltage
+        }
+        if ('operatingVoltage' in props) {
+          delete props.operatingVoltage
+        }
+      }
+      Object.entries(type.defaultProps).forEach(([key, value]) => {
+        if (props[key] === undefined || props[key] === null) {
+          props[key] = value
+        }
+      })
+      return { ...component, props }
+    }),
+  }
+}
+
 const applyChargingDerived = (schema: SchemaState, registry: ComponentType[]): SchemaState => {
   const summaries = computeChargeSummary(schema, registry)
   if (summaries.size === 0) return schema
@@ -141,7 +182,13 @@ const defaultSchema = (): SchemaState => ({
       typeId: 'battery',
       name: 'Main Battery',
       position: { x: 140, y: 140 },
-      props: { voltage: 12, operatingVoltage: 12, capacityAh: 200 },
+      props: {
+        outputVoltage: 12,
+        maxInputVoltage: 14.6,
+        capacityAh: 200,
+        recommendedChargeCurrentA: 45,
+        maxChargeCurrentA: 75,
+      },
       derived: { maxCurrentA: 200, voltageDomain: '12V' },
     },
     {
@@ -185,7 +232,7 @@ const applyDerivedAll = (schema: SchemaState, registry: ComponentType[]) =>
 const hydrateSchema = (registry: ComponentType[]) => {
   const saved = loadSchema()
   const base = saved ?? defaultSchema()
-  return applyDerivedAll(base, registry)
+  return applyDerivedAll(applyDefaultProps(base, registry), registry)
 }
 
 export const useSchemaStore = defineStore('schema', {

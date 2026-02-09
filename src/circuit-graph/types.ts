@@ -7,6 +7,17 @@ export type Net = {
   domains: string[]
 }
 
+export type LogicalNeighbor = {
+  nodeId: string
+  pathNodeIds: string[]
+  pathEdgeIds: string[]
+}
+
+export type LogicalNet = {
+  id: string
+  nodeIds: string[]
+}
+
 export type CircuitGraph = {
   nodes: ComponentInstance[]
   edges: Cable[]
@@ -18,6 +29,10 @@ export type CircuitGraph = {
   adjacency: Map<string, { neighborId: string; edgeId: string }[]>
   nodeDomains: Map<string, string[]>
   nets: Net[]
+  logicalNodeIds: string[]
+  logicalNeighbors: Map<string, LogicalNeighbor[]>
+  logicalAdjacency: Map<string, string[]>
+  logicalNets: LogicalNet[]
 }
 
 export type AnalysisSettings = {

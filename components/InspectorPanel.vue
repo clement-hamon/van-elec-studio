@@ -70,6 +70,15 @@
         <label for="gauge">Gauge (AWG)</label>
         <input id="gauge" v-model.number="cableGauge" type="number" step="1" >
       </div>
+      <div class="field">
+        <label>Direction</label>
+        <div class="derived">
+          <div>{{ cableDirectionLabel }}</div>
+          <button class="swap-button" type="button" @click="swapCableDirection">
+            Swap direction
+          </button>
+        </div>
+      </div>
       <div class="field field-readonly">
         <label>Gauge (mm²)</label>
         <div class="derived">{{ cableGaugeMm2 }} mm²</div>
@@ -133,6 +142,11 @@ const selectedIssues = computed(() => {
 const componentType = computed(() => {
   if (!selectedComponent.value) return null
   return schemaStore.registry.find((item) => item.id === selectedComponent.value?.typeId) ?? null
+})
+
+const cableDirectionLabel = computed(() => {
+  if (!selectedCable.value) return ''
+  return `${selectedCable.value.sourceId} → ${selectedCable.value.targetId}`
 })
 
 const componentFields = computed(() => componentType.value?.fields ?? [])
@@ -250,4 +264,29 @@ const cableAmpacity = computed(() => selectedCable.value?.derived.ampacityA ?? 0
 const cableVoltageDrop = computed(() =>
   selectedCable.value ? selectedCable.value.derived.voltageDropV.toFixed(2) : '0.00',
 )
+
+const swapCableDirection = () => {
+  if (!selectedCable.value) return
+  schemaStore.updateCable(selectedCable.value.id, {
+    sourceId: selectedCable.value.targetId,
+    targetId: selectedCable.value.sourceId,
+  })
+}
 </script>
+
+<style scoped>
+.swap-button {
+  margin-top: 8px;
+  border: 1px solid #2d2a25;
+  background: #f6f1e6;
+  color: #2d2a25;
+  padding: 6px 10px;
+  border-radius: 8px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.swap-button:hover {
+  background: #ede5d7;
+}
+</style>

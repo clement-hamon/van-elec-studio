@@ -28,6 +28,34 @@ export const fieldMaxChargeCurrentA: ComponentFieldDefinition = {
   step: 1,
 }
 
+export const fieldRecommendedChargeCurrentA: ComponentFieldDefinition = {
+  key: 'recommendedChargeCurrentA',
+  label: 'Recommended Charge Current (A)',
+  type: 'number',
+  step: 1,
+}
+
+export const fieldRecommendedChargeVoltage: ComponentFieldDefinition = {
+  key: 'recommendedChargeVoltage',
+  label: 'Recommended Charge Voltage (V)',
+  type: 'number',
+  step: 0.1,
+}
+
+export const fieldChargeCutoffVoltage: ComponentFieldDefinition = {
+  key: 'chargeCutoffVoltage',
+  label: 'Charge Cutoff Voltage (V)',
+  type: 'number',
+  step: 0.1,
+}
+
+export const fieldChargeCutoffDurationMs: ComponentFieldDefinition = {
+  key: 'chargeCutoffDurationMs',
+  label: 'Charge Cutoff Duration (ms)',
+  type: 'number',
+  step: 100,
+}
+
 export const fieldWatt: ComponentFieldDefinition = {
   key: 'watt',
   label: 'Power (W)',

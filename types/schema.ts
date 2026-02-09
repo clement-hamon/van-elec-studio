@@ -43,6 +43,7 @@ export type ComponentType = {
   category: ComponentCategory
   energyRole?: EnergyRole
   chargePathRole?: ChargePathRole
+  passThrough?: boolean
   defaultProps: Record<string, number | string | boolean>
   fields?: ComponentFieldDefinition[]
   ports: PortDefinition[]
@@ -73,10 +74,14 @@ export type ComponentInstance = {
 }
 
 export type BatteryProps = {
-  voltage: number
-  operatingVoltage: number
   capacityAh: number
+  outputVoltage?: number
+  maxInputVoltage?: number
   chemistry?: string
+  recommendedChargeVoltage?: number
+  chargeCutoffVoltage?: number
+  chargeCutoffDurationMs?: number
+  recommendedChargeCurrentA?: number
   maxChargeCurrentA?: number
   absorptionVoltage?: number
   floatVoltage?: number

@@ -4,122 +4,85 @@ import { error, issueId, warning } from './rule-utils'
 
 export const alternatorDirectConnectionRule: Rule = {
   id: 'alternator-direct-connection',
-  description: 'Require a DC-DC charger between alternator and battery.',
-  run: ({ schema, registry }) => {
+  description: 'Require a charger/controller between sources and batteries in the logical graph.',
+  run: ({ registry, graph }) => {
     const typeById = new Map(registry.map((item) => [item.id, item]))
-    const componentById = new Map(schema.components.map((item) => [item.id, item]))
-    const outgoing = new Map<string, string[]>()
-    const incoming = new Map<string, string[]>()
-
-    schema.cables.forEach((cable) => {
-      const out = outgoing.get(cable.sourceId) ?? []
-      out.push(cable.targetId)
-      outgoing.set(cable.sourceId, out)
-
-      const inc = incoming.get(cable.targetId) ?? []
-      inc.push(cable.sourceId)
-      incoming.set(cable.targetId, inc)
-    })
 
     const isBattery = (type: ComponentType | undefined) =>
       type?.chargePathRole === 'battery' || type?.id === 'battery'
-    const isAlternator = (type: ComponentType | undefined) => type?.id === 'alternator'
-    const isDcDc = (type: ComponentType | undefined) => type?.id === 'dc-dc-charger'
+    const isChargeSource = (type: ComponentType | undefined) =>
+      type?.energyRole === 'source' ||
+      type?.chargePathRole === 'source' ||
+      type?.chargePathRole === 'inlet'
+    const isChargeConverter = (type: ComponentType | undefined) =>
+      type?.energyRole === 'charger' ||
+      type?.chargePathRole === 'charger' ||
+      type?.chargePathRole === 'controller'
 
     const issues = []
 
-    schema.components.forEach((component) => {
-      const type = typeById.get(component.typeId)
-      if (!isAlternator(type)) return
+    graph.logicalNets.forEach((net) => {
+      const netSources: string[] = []
+      const netBatteries: string[] = []
+      const netConverters: string[] = []
 
-      const targets = outgoing.get(component.id) ?? []
-      if (targets.length === 0) return
-
-      const invalidTargets = targets.filter((targetId) => {
-        const target = componentById.get(targetId)
-        const targetType = target ? typeById.get(target.typeId) : undefined
-        return !isDcDc(targetType)
+      net.nodeIds.forEach((nodeId) => {
+        const component = graph.nodesById.get(nodeId)
+        if (!component) return
+        const type = typeById.get(component.typeId)
+        if (isBattery(type)) netBatteries.push(nodeId)
+        if (isChargeSource(type)) netSources.push(nodeId)
+        if (isChargeConverter(type)) netConverters.push(nodeId)
       })
 
-      if (invalidTargets.length > 0) {
-        issues.push(
-          error({
-            id: issueId('alternator-dcdc-required', component.id),
-            message: 'Alternator output must feed a DC-DC charger before the battery.',
-            targetType: 'component',
-            targetId: component.id,
-            suggestion: 'Connect the alternator output to a DC-DC charger.',
-          }),
-        )
+      if (netSources.length > 0 && netBatteries.length > 0 && netConverters.length === 0) {
+        netSources.forEach((sourceId) => {
+          issues.push(
+            error({
+              id: issueId('source-missing-charger', sourceId),
+              message: 'Charging sources must feed a charger/controller before the battery.',
+              targetType: 'component',
+              targetId: sourceId,
+              suggestion: 'Insert a charger/controller between the source and battery.',
+              category: 'Topology',
+              blame: {
+                nodes: [...netSources, ...netBatteries],
+              },
+            }),
+          )
+        })
       }
-    })
 
-    schema.components.forEach((component) => {
-      const type = typeById.get(component.typeId)
-      if (!isDcDc(type)) return
+      netConverters.forEach((converterId) => {
+        const converter = graph.nodesById.get(converterId)
+        const converterType = converter ? typeById.get(converter.typeId) : undefined
+        const label = converterType?.label ?? 'Charger'
+        const hasAnyConnections = (graph.logicalNeighbors.get(converterId) ?? []).length > 0
 
-      const inputs = incoming.get(component.id) ?? []
-      const outputs = outgoing.get(component.id) ?? []
+        if (hasAnyConnections && netSources.length === 0) {
+          issues.push(
+            warning({
+              id: issueId('charger-missing-source', converterId),
+              message: `${label} should be fed by a source.`,
+              targetType: 'component',
+              targetId: converterId,
+              suggestion: `Connect a source to the ${label.toLowerCase()}.`,
+            }),
+          )
+        }
 
-      const invalidInputs = inputs.filter((sourceId) => {
-        const source = componentById.get(sourceId)
-        const sourceType = source ? typeById.get(source.typeId) : undefined
-        return !isAlternator(sourceType)
+        if (hasAnyConnections && netBatteries.length === 0) {
+          issues.push(
+            warning({
+              id: issueId('charger-missing-battery', converterId),
+              message: `${label} should feed a battery.`,
+              targetType: 'component',
+              targetId: converterId,
+              suggestion: `Connect the ${label.toLowerCase()} output to a battery.`,
+            }),
+          )
+        }
       })
-
-      const invalidOutputs = outputs.filter((targetId) => {
-        const target = componentById.get(targetId)
-        const targetType = target ? typeById.get(target.typeId) : undefined
-        return !isBattery(targetType)
-      })
-
-      if (invalidInputs.length > 0) {
-        issues.push(
-          error({
-            id: issueId('dcdc-invalid-input', component.id),
-            message: 'DC-DC charger input must come from an alternator.',
-            targetType: 'component',
-            targetId: component.id,
-            suggestion: 'Connect the DC-DC charger input to an alternator.',
-          }),
-        )
-      }
-
-      if (invalidOutputs.length > 0) {
-        issues.push(
-          error({
-            id: issueId('dcdc-invalid-output', component.id),
-            message: 'DC-DC charger output must connect directly to a battery.',
-            targetType: 'component',
-            targetId: component.id,
-            suggestion: 'Connect the DC-DC charger output to a battery.',
-          }),
-        )
-      }
-
-      if ((inputs.length > 0 || outputs.length > 0) && inputs.length === 0) {
-        issues.push(
-          warning({
-            id: issueId('dcdc-missing-input', component.id),
-            message: 'DC-DC charger should be fed by an alternator.',
-            targetType: 'component',
-            targetId: component.id,
-            suggestion: 'Connect an alternator to the DC-DC charger input.',
-          }),
-        )
-      }
-
-      if ((inputs.length > 0 || outputs.length > 0) && outputs.length === 0) {
-        issues.push(
-          warning({
-            id: issueId('dcdc-missing-output', component.id),
-            message: 'DC-DC charger should feed a battery.',
-            targetType: 'component',
-            targetId: component.id,
-            suggestion: 'Connect the DC-DC charger output to a battery.',
-          }),
-        )
-      }
     })
 
     return issues

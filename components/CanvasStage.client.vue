@@ -696,10 +696,13 @@ const ensureCable = (cableId: string) => {
   const existing = lineMap.get(cableId)
   if (existing) return existing
 
-  const line = new Konva.Line({
+  const line = new Konva.Arrow({
     points: [0, 0, 0, 0],
     stroke: '#2d2a25',
+    fill: '#2d2a25',
     strokeWidth: 2,
+    pointerLength: 10,
+    pointerWidth: 8,
     lineCap: 'round',
     lineJoin: 'round',
     hitStrokeWidth: 12,

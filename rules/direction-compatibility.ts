@@ -26,33 +26,39 @@ export const directionCompatibilityRule: Rule = {
   run: ({ graph }) => {
     const issues = []
 
-    graph.edges.forEach((cable) => {
-      const source = graph.nodesById.get(cable.sourceId)
-      const target = graph.nodesById.get(cable.targetId)
-      const sourceType = source ? graph.typesById.get(source.typeId) : undefined
-      const targetType = target ? graph.typesById.get(target.typeId) : undefined
-
+    graph.logicalNodeIds.forEach((sourceId) => {
+      const source = graph.nodesById.get(sourceId)
+      if (!source) return
+      const sourceType = graph.typesById.get(source.typeId)
       const sourceClass = classifyDirection(sourceType)
-      const targetClass = classifyDirection(targetType)
+      if (sourceClass === 'unknown' || sourceClass === 'bidirectional') return
 
-      if (sourceClass === 'unknown' || targetClass === 'unknown') return
-      if (sourceClass === 'bidirectional' || targetClass === 'bidirectional') return
-      if (sourceClass !== targetClass) return
+      const targets = graph.logicalNeighbors.get(sourceId) ?? []
+      targets.forEach((target) => {
+        if (sourceId.localeCompare(target.nodeId) >= 0) return
+        const targetNode = graph.nodesById.get(target.nodeId)
+        const targetType = targetNode ? graph.typesById.get(targetNode.typeId) : undefined
+        const targetClass = classifyDirection(targetType)
 
-      issues.push(
-        error({
-          id: issueId('direction-mismatch', cable.id),
-          message: 'Connection is between two components with the same directionality.',
-          targetType: 'cable',
-          targetId: cable.id,
-          suggestion: 'Connect a source to a sink or insert a compatible converter.',
-          category: 'Topology',
-          blame: {
-            nodes: [cable.sourceId, cable.targetId],
-            edges: [cable.id],
-          },
-        }),
-      )
+        if (targetClass === 'unknown' || targetClass === 'bidirectional') return
+        if (sourceClass !== targetClass) return
+
+        const edgeId = target.pathEdgeIds[0]
+        issues.push(
+          error({
+            id: issueId('direction-mismatch', `${sourceId}-${target.nodeId}`),
+            message: 'Connection is between two components with the same directionality.',
+            targetType: edgeId ? 'cable' : 'component',
+            targetId: edgeId ?? sourceId,
+            suggestion: 'Connect a source to a sink or insert a compatible converter.',
+            category: 'Topology',
+            blame: {
+              nodes: [sourceId, target.nodeId],
+              edges: target.pathEdgeIds.length > 0 ? target.pathEdgeIds : undefined,
+            },
+          }),
+        )
+      })
     })
 
     return issues

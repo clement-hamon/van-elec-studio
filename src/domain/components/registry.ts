@@ -16,6 +16,7 @@ import {
   fieldOutputVoltage,
   fieldRatedCurrentA,
   fieldRatingA,
+  fieldRecommendedChargeCurrentA,
   fieldVoltage,
   fieldWatt,
 } from './definitions'
@@ -29,11 +30,23 @@ export const componentRegistry: ComponentType[] = [
     category: 'storage',
     energyRole: 'storage',
     chargePathRole: 'battery',
-    defaultProps: { voltage: 12, operatingVoltage: 12, capacityAh: 200 },
-    fields: [fieldVoltage, fieldOperatingVoltage, fieldCapacityAh, fieldMaxChargeCurrentA],
+    defaultProps: {
+      outputVoltage: 12,
+      maxInputVoltage: 14.6,
+      capacityAh: 200,
+      recommendedChargeCurrentA: 45,
+      maxChargeCurrentA: 75,
+    },
+    fields: [
+      fieldOutputVoltage,
+      fieldMaxInputVoltage,
+      fieldCapacityAh,
+      fieldRecommendedChargeCurrentA,
+      fieldMaxChargeCurrentA,
+    ],
     ports: [
-      { id: 'positive', label: '+', direction: 'out', domain: 'dc', maxCurrent: 200 },
-      { id: 'negative', label: '-', direction: 'out', domain: 'dc', maxCurrent: 200 },
+      { id: 'positive', label: '+', direction: 'bidirectional', domain: 'dc', maxCurrent: 200 },
+      { id: 'negative', label: '-', direction: 'bidirectional', domain: 'dc', maxCurrent: 200 },
     ],
     constraints: { voltageDomain: '12V', maxCurrent: 200 },
   },
@@ -44,6 +57,7 @@ export const componentRegistry: ComponentType[] = [
       'Overcurrent protection for a single circuit. Place close to the power source and size to protect the downstream cable and equipment.',
     category: 'distribution',
     energyRole: 'protection',
+    passThrough: true,
     defaultProps: { ratingA: 60, operatingVoltage: 32 },
     fields: [fieldRatingA, fieldOperatingVoltage],
     ports: [
@@ -110,6 +124,7 @@ export const componentRegistry: ComponentType[] = [
       'Distribution node for splitting DC power to multiple branches. Feed with a protected main line and fuse each outgoing branch.',
     category: 'distribution',
     energyRole: 'distribution',
+    passThrough: true,
     defaultProps: { operatingVoltage: 12, maxBranches: 4 },
     fields: [fieldOperatingVoltage, fieldMaxBranches],
     ports: [
