@@ -1,8 +1,8 @@
 import { defineStore } from 'pinia'
 import { computeCableDerived } from '~/services/cable'
-import { computeCablePower, resolveComponentVoltage } from '~/services/power-flow'
+import { computeCablePower } from '~/services/power-flow'
 import { runValidation } from '~/services/validation'
-import { computeChargeOutputs, computeChargeSummary } from '~/services/charging'
+import { computeChargeSummary } from '~/services/charging'
 import { componentRegistry } from '~/src/domain/components/registry'
 import { loadSchema, saveSchema } from '~/services/storage'
 import type {
@@ -35,58 +35,10 @@ const buildCable = (
 
 const applyCableDerived = (schema: SchemaState, registry: ComponentType[]): SchemaState => {
   const powerMap = computeCablePower(schema, registry)
-  const chargeOutputs = computeChargeOutputs(schema, registry)
-  const componentById = new Map(schema.components.map((component) => [component.id, component]))
-  const typeById = new Map(registry.map((type) => [type.id, type]))
-  const batteryScaleById = new Map<string, number>()
-
-  schema.components.forEach((component) => {
-    const type = typeById.get(component.typeId)
-    const isBattery = type?.chargePathRole === 'battery' || type?.id === 'battery'
-    if (!isBattery) return
-
-    const limit =
-      typeof component.props.maxChargeCurrentA === 'number' && component.props.maxChargeCurrentA > 0
-        ? component.props.maxChargeCurrentA
-        : null
-    if (!limit) return
-
-    const incomingCables = schema.cables.filter((cable) => cable.targetId === component.id)
-    const totalIncoming = incomingCables.reduce(
-      (sum, cable) => sum + (chargeOutputs.get(cable.sourceId) ?? 0),
-      0,
-    )
-    if (totalIncoming <= 0 || totalIncoming <= limit) return
-
-    batteryScaleById.set(component.id, limit / totalIncoming)
-  })
 
   return {
     ...schema,
-    cables: schema.cables.map((cable) => {
-      const powerInfo = powerMap.get(cable.id)
-      const expectedCurrent = powerInfo?.expectedCurrentA ?? 0
-      if (expectedCurrent > 0) return buildCable(cable, powerInfo)
-
-      const target = componentById.get(cable.targetId)
-      const targetType = target ? typeById.get(target.typeId) : undefined
-      const isBattery = targetType?.chargePathRole === 'battery' || targetType?.id === 'battery'
-      if (!isBattery) return buildCable(cable, powerInfo)
-
-      const scale = batteryScaleById.get(cable.targetId) ?? 1
-      const chargeCurrent = (chargeOutputs.get(cable.sourceId) ?? 0) * scale
-      if (chargeCurrent <= 0) return buildCable(cable, powerInfo)
-
-      const source = componentById.get(cable.sourceId)
-      const sourceType = source ? typeById.get(source.typeId) : undefined
-      const voltage = resolveComponentVoltage(source, sourceType)
-
-      return buildCable(cable, {
-        expectedCurrentA: chargeCurrent,
-        expectedPowerW: chargeCurrent * voltage,
-        circuitVoltageV: voltage,
-      })
-    }),
+    cables: schema.cables.map((cable) => buildCable(cable, powerMap.get(cable.id))),
   }
 }
 
@@ -223,6 +175,14 @@ const defaultSchema = (): SchemaState => ({
   updatedAt: nowIso(),
 })
 
+const emptySchema = (): SchemaState => ({
+  components: [],
+  cables: [],
+  groups: [],
+  selection: {},
+  updatedAt: nowIso(),
+})
+
 const applyDerivedAll = (schema: SchemaState, registry: ComponentType[]) =>
   applyChargingDerived(
     applyCableDerived(applyComponentDerived(schema, registry), registry),
@@ -287,6 +247,10 @@ export const useSchemaStore = defineStore('schema', {
     },
     reset() {
       this.schema = applyDerivedAll(defaultSchema(), this.registry)
+      this.refreshValidation()
+    },
+    clearSchema() {
+      this.schema = applyDerivedAll(emptySchema(), this.registry)
       this.refreshValidation()
     },
     setSelection(payload: { componentId?: string; cableId?: string; groupId?: string }) {

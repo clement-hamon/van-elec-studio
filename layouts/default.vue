@@ -6,8 +6,9 @@
         <span class="brand-name">Van Elec Studio</span>
       </div>
       <div class="topbar-actions">
-        <button class="btn btn-secondary" type="button" @click="onLoad">Load</button>
-        <button class="btn btn-primary" type="button" @click="onSave">Save</button>
+        <button class="btn btn-ghost" type="button" :disabled="isEmpty" @click="onReset">
+          Reset
+        </button>
       </div>
     </header>
     <slot />
@@ -15,17 +16,21 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted } from 'vue'
+import { computed, onMounted } from 'vue'
 import { useSchemaStore } from '~/stores/schema'
 
 const schemaStore = useSchemaStore()
+const isEmpty = computed(
+  () => schemaStore.schema.components.length === 0 && schemaStore.schema.cables.length === 0,
+)
 
-const onSave = () => {
-  schemaStore.saveNow()
-}
-
-const onLoad = () => {
-  schemaStore.loadFromStorage()
+const onReset = () => {
+  if (
+    !window.confirm('Clear the canvas? This will remove all components, cables, and groups.')
+  ) {
+    return
+  }
+  schemaStore.clearSchema()
 }
 
 onMounted(() => {
