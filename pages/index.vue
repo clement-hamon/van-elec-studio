@@ -37,7 +37,8 @@
         </div>
       </div>
       <div class="panel-body">
-        <InspectorPanel />
+        <SchemaSummary v-if="showSchemaSummary" :cables="schemaCables" />
+        <InspectorPanel v-else />
       </div>
     </aside>
   </div>
@@ -48,6 +49,7 @@ import { computed, ref } from 'vue'
 import { useSchemaStore } from '~/stores/schema'
 import CanvasStage from '~/components/CanvasStage.client.vue'
 import InspectorPanel from '~/components/InspectorPanel.vue'
+import SchemaSummary from '~/components/SchemaSummary.vue'
 
 const schemaStore = useSchemaStore()
 
@@ -55,6 +57,8 @@ const mode = ref<'select' | 'connect'>('select')
 const libraryItems = computed(() => schemaStore.registry)
 const selectedComponent = computed(() => schemaStore.selectedComponent)
 const selectedCable = computed(() => schemaStore.selectedCable)
+const showSchemaSummary = computed(() => !selectedComponent.value && !selectedCable.value)
+const schemaCables = computed(() => schemaStore.schema.cables)
 
 const inspectorTitle = computed(() => {
   if (selectedComponent.value) {
@@ -64,7 +68,7 @@ const inspectorTitle = computed(() => {
 
   if (selectedCable.value) return 'Cable'
 
-  return 'Schema Summary'
+  return 'Schema Components'
 })
 
 const inspectorDescription = computed(() => {
@@ -77,7 +81,7 @@ const inspectorDescription = computed(() => {
     return 'Edit cable properties and derived values.'
   }
 
-  return 'Overview of cables in the current schema.'
+  return null
 })
 
 const addComponent = (typeId: string) => {
