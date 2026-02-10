@@ -1,25 +1,5 @@
 <template>
   <div class="workspace">
-    <aside class="panel panel-left">
-      <div class="panel-header">
-        <h2>Library</h2>
-        <p>Drag components to the canvas.</p>
-      </div>
-      <div class="panel-body">
-        <button
-          v-for="item in libraryItems"
-          :key="item.id"
-          class="list-item"
-          type="button"
-          draggable="true"
-          @dragstart="onDragStart($event, item.id)"
-          @click="addComponent(item.id)"
-        >
-          {{ item.label }}
-        </button>
-      </div>
-    </aside>
-
     <section class="canvas-area">
       <ClientOnly>
         <CanvasStage :mode="mode" />
@@ -33,7 +13,19 @@
       <div class="panel-header">
         <div class="inspector-header">
           <h2>{{ inspectorTitle }}</h2>
-          <p>{{ inspectorDescription }}</p>
+          <div class="add-component">
+              <select
+                v-model="selectedTypeId"
+                class="btn btn-primary add-component__select"
+                aria-label="Select a component to add"
+                @change="onAddSelected"
+              >
+                <option value="" disabled>Add a component</option>
+                <option v-for="item in libraryItems" :key="item.id" :value="item.id">
+                  {{ item.label }}
+                </option>
+              </select>
+          </div>
         </div>
       </div>
       <div class="panel-body">
@@ -59,6 +51,8 @@ const selectedComponent = computed(() => schemaStore.selectedComponent)
 const selectedCable = computed(() => schemaStore.selectedCable)
 const showSchemaSummary = computed(() => !selectedComponent.value && !selectedCable.value)
 const schemaCables = computed(() => schemaStore.schema.cables)
+const isAddMenuOpen = ref(false)
+const selectedTypeId = ref('')
 
 const inspectorTitle = computed(() => {
   if (selectedComponent.value) {
@@ -68,28 +62,17 @@ const inspectorTitle = computed(() => {
 
   if (selectedCable.value) return 'Cable'
 
-  return 'Schema Components'
-})
-
-const inspectorDescription = computed(() => {
-  if (selectedComponent.value) {
-    const type = schemaStore.registry.find((item) => item.id === selectedComponent.value?.typeId)
-    return type?.description ?? 'Set properties for the selected component.'
-  }
-
-  if (selectedCable.value) {
-    return 'Edit cable properties and derived values.'
-  }
-
-  return null
+  return 'Components'
 })
 
 const addComponent = (typeId: string) => {
   schemaStore.addComponentFromType(typeId)
 }
 
-const onDragStart = (event: DragEvent, typeId: string) => {
-  event.dataTransfer?.setData('application/x-van-elec-component', typeId)
-  event.dataTransfer?.setData('text/plain', typeId)
+const onAddSelected = () => {
+  if (!selectedTypeId.value) return
+  addComponent(selectedTypeId.value)
+  selectedTypeId.value = ''
+  isAddMenuOpen.value = false
 }
 </script>
