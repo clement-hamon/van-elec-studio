@@ -167,6 +167,22 @@ export const useCanvasCables = ({ layer, schemaStore }: CanvasCablesOptions) => 
     })
   }
 
+  function getConnectorPoints(from, to) {
+    const dx = to.x - from.x;
+    const dy = to.y - from.y;
+    const angle = Math.atan2(-dy, dx);
+
+    const radius = 50;
+
+    return [
+      from.x + -radius * Math.cos(angle + Math.PI),
+      from.y + radius * Math.sin(angle + Math.PI),
+      to.x + -radius * Math.cos(angle),
+      to.y + radius * Math.sin(angle),
+    ];
+  }
+
+
   const syncCableLines = (
     getNodeCenter: (nodeId: string) => { x: number; y: number } | null,
   ) => {
@@ -175,8 +191,14 @@ export const useCanvasCables = ({ layer, schemaStore }: CanvasCablesOptions) => 
       if (!cable) return
       const sourceCenter = getNodeCenter(cable.sourceId)
       const targetCenter = getNodeCenter(cable.targetId)
+
       if (!sourceCenter || !targetCenter) return
-      const points = buildOrthogonalPoints(sourceCenter, targetCenter)
+      
+      const connectorPoints = getConnectorPoints(sourceCenter, targetCenter)
+      const originPoint = { x: connectorPoints[0], y: connectorPoints[1] }
+      const targetPoint = { x: connectorPoints[2], y: connectorPoints[3] }
+      
+      const points = buildOrthogonalPoints(originPoint, targetPoint)
       line.setAttr('points', points)
 
       const badge = cableBadgeMap.get(cableId)
