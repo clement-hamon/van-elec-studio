@@ -23,7 +23,7 @@
         :value="zoomLevel"
         aria-label="Zoom level"
         @input="onZoomInput"
-      />
+      >
       <button
         class="canvas-zoom__btn"
         type="button"
