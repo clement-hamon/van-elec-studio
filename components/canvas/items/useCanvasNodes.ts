@@ -84,7 +84,7 @@ export const useCanvasNodes = ({
     const existing = nodeMap.get(componentId)
     if (existing) return existing
 
-    const group = new Konva.Group({
+    const componentGroup = new Konva.Group({
       draggable: true,
       id: componentId,
     })
@@ -99,16 +99,27 @@ export const useCanvasNodes = ({
       name: 'node-rect',
     })
 
-    const halo = new Konva.Circle({
+    const error_halo = new Konva.Circle({
       x: NODE_WIDTH / 2,
       y: nodeImageOffset.y + nodeImageSize.height / 2,
       radius: nodeHaloRadius,
-      stroke: '#d96b3a',
+      fill: '#d96b3a',
+      opacity: 0.22,
+      visible: false,
+      listening: false,
+      name: 'error_halo',
+    })
+
+    const selection_halo = new Konva.Circle({
+      x: NODE_WIDTH / 2,
+      y: nodeImageOffset.y + nodeImageSize.height / 2,
+      radius: nodeHaloRadius,
+      stroke: '#3a84d9',
       strokeWidth: 2,
       opacity: 0,
       visible: false,
       listening: false,
-      name: 'node-halo',
+      name: 'selection_halo',
     })
 
     const title = new Konva.Text({
@@ -123,18 +134,8 @@ export const useCanvasNodes = ({
       name: 'node-title',
     })
 
-    const badge = new Konva.Circle({
-      x: NODE_WIDTH - 14,
-      y: 14,
-      radius: 6,
-      fill: '#f2b46d',
-      stroke: '#ffffff',
-      strokeWidth: 1,
-      visible: false,
-      name: 'issue-badge',
-    })
-
     const iconUrl = iconUrlForComponent(component, baseURL)
+
     const imageElement = ensureNodeImage(layer, iconUrl)
     const image = new Konva.Image({
       x: nodeImageOffset.x,
@@ -142,17 +143,16 @@ export const useCanvasNodes = ({
       width: nodeImageSize.width,
       height: nodeImageSize.height,
       image: imageElement ?? undefined,
-      opacity: 0.9,
       listening: false,
       name: 'node-image',
     })
 
-    group.add(rect)
-    group.add(halo)
-    group.add(image)
-    group.add(title)
-    group.add(badge)
-    group.setAttr('iconUrl', iconUrl)
+    componentGroup.add(rect)
+    componentGroup.add(error_halo)
+    componentGroup.add(selection_halo)
+    componentGroup.add(image)
+    componentGroup.add(title)
+    componentGroup.setAttr('iconUrl', iconUrl)
 
     const connectionExists = (sourceId: string, targetId: string) =>
       schemaStore.schema.cables.some(
@@ -218,25 +218,25 @@ export const useCanvasNodes = ({
       schemaStore.setSelection({ componentId })
     }
 
-    group.on('click tap', (event) => {
+    componentGroup.on('click tap', (event) => {
       event.cancelBubble = true
       handleNodeClick(event)
     })
 
-    group.on('dragmove', () => {
+    componentGroup.on('dragmove', () => {
       onRequestSyncCables()
       layer.batchDraw()
     })
 
-    group.on('dragend', () => {
+    componentGroup.on('dragend', () => {
       schemaStore.updateComponent(componentId, {
-        position: { x: group.x(), y: group.y() },
+        position: { x: componentGroup.x(), y: componentGroup.y() },
       })
     })
 
-    nodeMap.set(componentId, group)
-    layer.add(group)
-    return group
+    nodeMap.set(componentId, componentGroup)
+    layer.add(componentGroup)
+    return componentGroup
   }
 
   const syncNodes = (components: ComponentInstance[]) => {
@@ -269,28 +269,27 @@ export const useCanvasNodes = ({
 
   const applySelection = (selectedComponentId: string | undefined, pendingId: string | null) => {
     nodeMap.forEach((node, nodeId) => {
-      const halo = node.findOne<Konva.Circle>('.node-halo')
+      const halo = node.findOne<Konva.Circle>('.selection_halo')
       if (!halo) return
       const isSelected = nodeId === selectedComponentId
       const isPending = nodeId === pendingId
       const active = isSelected || isPending
       halo.visible(active)
-      halo.stroke(isPending ? '#4c7d6b' : '#d96b3a')
+      // halo.stroke(isPending ? '#4c7d6b' : '#d96b3a')
       halo.opacity(active ? 0.22 : 0)
     })
   }
 
   const applyIssueBadges = (componentIssues: Map<string, 'warning' | 'error'>) => {
     nodeMap.forEach((node, nodeId) => {
-      const badge = node.findOne<Konva.Circle>('.issue-badge')
-      if (!badge) return
+      const error_halo = node.findOne<Konva.Circle>('.error_halo')
+      if (!error_halo) return
       const level = componentIssues.get(nodeId)
       if (!level) {
-        badge.visible(false)
+        error_halo.visible(false)
         return
       }
-      badge.visible(true)
-      badge.fill(level === 'error' ? '#e07a5f' : '#f2b46d')
+      error_halo.visible(true)
     })
   }
 

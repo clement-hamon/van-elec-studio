@@ -59,6 +59,23 @@ let resizeObserver: ResizeObserver | null = null
 let keydownHandler: ((event: KeyboardEvent) => void) | null = null
 let items: ReturnType<typeof useCanvasItems> | null = null
 
+const updateBackground = () => {
+  if (!stage || !background) return
+  const scale = stage.scaleX() || 1
+  const stagePos = stage.position()
+  
+  // Calculate the visible area in the transformed coordinate system
+  const visibleArea = {
+    x: -stagePos.x / scale,
+    y: -stagePos.y / scale,
+    width: stage.width() / scale,
+    height: stage.height() / scale,
+  }
+  
+  background.position({ x: visibleArea.x, y: visibleArea.y })
+  background.size({ width: visibleArea.width, height: visibleArea.height })
+}
+
 const getDropPosition = (event: DragEvent) => {
   if (!container.value || !stage) return null
   const rect = container.value.getBoundingClientRect()
@@ -126,6 +143,10 @@ const initStage = () => {
   })
   stage.on('dragend', () => {
     isPanning.value = false
+    updateBackground()
+  })
+  stage.on('dragmove', () => {
+    updateBackground()
   })
   stage.on('wheel', (event) => {
     if (!stage) return
@@ -136,6 +157,7 @@ const initStage = () => {
     const newScale = direction > 0 ? oldScale * scaleFactor : oldScale / scaleFactor
     const pointer = stage.getPointerPosition()
     applyZoom(newScale, pointer || undefined)
+    updateBackground()
   })
   stage.on('click tap', (event) => {
     if (stage?.isDragging()) return
@@ -159,6 +181,7 @@ const initStage = () => {
   })
   layer.add(background)
   background.zIndex(0)
+  updateBackground()
 
   resizeObserver = new ResizeObserver(() => {
     if (!stage || !container.value || !background) return
@@ -166,8 +189,7 @@ const initStage = () => {
       width: container.value.clientWidth,
       height: container.value.clientHeight,
     })
-    background.width(stage.width())
-    background.height(stage.height())
+    updateBackground()
     items?.syncCableLines()
     stage.batchDraw()
   })
@@ -274,6 +296,7 @@ const applyZoom = (value: number, anchor?: { x: number; y: number }) => {
   stage.scale({ x: newScale, y: newScale })
   stage.position(newPos)
   zoomLevel.value = Number(newScale.toFixed(2))
+  updateBackground()
   stage.batchDraw()
 }
 
@@ -285,6 +308,7 @@ const resetView = () => {
   stage.scale({ x: 1, y: 1 })
   stage.position({ x: 0, y: 0 })
   zoomLevel.value = 1
+  updateBackground()
   stage.batchDraw()
 }
 
