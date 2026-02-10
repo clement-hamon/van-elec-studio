@@ -1,6 +1,8 @@
 import Konva from 'konva'
 import type { useSchemaStore } from '~/stores/schema'
 import { buildOrthogonalPoints, getPolylineMidpoint } from './orthogonalPath'
+import type { Cable } from '~/types/schema'
+import { awgToMm2 } from '~/services/cable'
 
 type CableShapeConfig = Konva.ShapeConfig & {
   points: number[]
@@ -12,6 +14,7 @@ type CableShapeConfig = Konva.ShapeConfig & {
 const CABLE_POINTER_LENGTH = 10
 const CABLE_POINTER_WIDTH = 8
 const CABLE_CORNER_RADIUS = 16
+const CABLE_WIDTH_SCALE = 0.7 // Adjust this to make all cables thicker (>1.0) or thinner (<1.0)
 
 const drawRoundedPath = (context, points: number[], radius: number) => {
   if (points.length < 4) return
@@ -44,38 +47,29 @@ const drawRoundedPath = (context, points: number[], radius: number) => {
   context.lineTo(points[points.length - 2], points[points.length - 1])
 }
 
-const drawArrowHead = (
-  context,
-  points: number[],
-  pointerLength: number,
-  pointerWidth: number,
-) => {
-  if (points.length < 4 || pointerLength <= 0 || pointerWidth <= 0) return
-
-  const endX = points[points.length - 2]
-  const endY = points[points.length - 1]
-  const prevX = points[points.length - 4]
-  const prevY = points[points.length - 3]
-
-  const angle = Math.atan2(endY - prevY, endX - prevX)
-  const sin = Math.sin(angle)
-  const cos = Math.cos(angle)
-
-  const leftX = endX - pointerLength * cos + (pointerWidth / 2) * sin
-  const leftY = endY - pointerLength * sin - (pointerWidth / 2) * cos
-  const rightX = endX - pointerLength * cos - (pointerWidth / 2) * sin
-  const rightY = endY - pointerLength * sin + (pointerWidth / 2) * cos
-
-  context.beginPath()
-  context.moveTo(endX, endY)
-  context.lineTo(leftX, leftY)
-  context.lineTo(rightX, rightY)
-  context.closePath()
-}
-
 type CanvasCablesOptions = {
   layer: Konva.Layer
   schemaStore: ReturnType<typeof useSchemaStore>
+}
+
+const getCableLineStrokeWidth = (gaugeAwg: number) => {
+  console.log(`Calculating stroke width for AWG ${gaugeAwg}`)
+  // Convert AWG to cross-sectional area in mm²
+  const mm2 = awgToMm2(gaugeAwg)
+  const minWidth = 1.5 * CABLE_WIDTH_SCALE
+  const maxWidth = 8 * CABLE_WIDTH_SCALE
+  
+  // Logarithmic mapping: width = minWidth + scale * log(mm2)
+  // Using natural log for smooth scaling
+  const logMm2 = Math.log(Math.max(mm2, 0.1)) // Prevent log(0)
+  const logMin = Math.log(0.5)  // ~AWG 20 territory
+  const logMax = Math.log(60)   // ~AWG 00 territory
+  // Normalize to 0-1 range
+  const normalized = Math.max(0, Math.min(1, (logMm2 - logMin) / (logMax - logMin)))
+  
+  // Map to width range and round to nearest 0.5 for clean rendering
+  const width = minWidth + normalized * (maxWidth - minWidth)
+  return Math.round(width * 2) / 2
 }
 
 export const useCanvasCables = ({ layer, schemaStore }: CanvasCablesOptions) => {
@@ -100,19 +94,19 @@ export const useCanvasCables = ({ layer, schemaStore }: CanvasCablesOptions) => 
     return badge
   }
 
-  const ensureCable = (cableId: string) => {
-    const existing = lineMap.get(cableId)
+  const ensureCable = (cable: Cable) => {
+    const existing = lineMap.get(cable.id)
     if (existing) return existing
 
     const line = new Konva.Shape<CableShapeConfig>({
       points: [0, 0, 0, 0],
-      stroke: '#2d2a25',
-      fill: '#2d2a25',
-      strokeWidth: 2,
+      stroke: '#e64141ff',
+      fill: '#e64141ff',
+      strokeWidth: getCableLineStrokeWidth(cable.props.gaugeAwg),
       lineCap: 'round',
       lineJoin: 'round',
       hitStrokeWidth: 12,
-      id: cableId,
+      id: cable.id,
       cornerRadius: CABLE_CORNER_RADIUS,
       pointerLength: CABLE_POINTER_LENGTH,
       pointerWidth: CABLE_POINTER_WIDTH,
@@ -121,31 +115,26 @@ export const useCanvasCables = ({ layer, schemaStore }: CanvasCablesOptions) => 
         if (!points || points.length < 4) return
 
         const cornerRadius = (shape.getAttr('cornerRadius') as number | undefined) ?? 0
-        const pointerLength = (shape.getAttr('pointerLength') as number | undefined) ?? 0
-        const pointerWidth = (shape.getAttr('pointerWidth') as number | undefined) ?? 0
 
         drawRoundedPath(context, points, cornerRadius)
         context.strokeShape(shape)
-
-        drawArrowHead(context, points, pointerLength, pointerWidth)
-        context.fillStrokeShape(shape)
       },
     })
 
     line.on('click tap', (event) => {
       event.cancelBubble = true
-      schemaStore.setSelection({ cableId })
+      schemaStore.setSelection({ cableId: cable.id })
     })
 
-    lineMap.set(cableId, line)
+    lineMap.set(cable.id, line)
     layer.add(line)
     line.zIndex(1)
     return line
   }
 
-  const syncCables = (cables: { id: string }[]) => {
+  const syncCables = (cables: Cable[]) => {
     cables.forEach((cable) => {
-      const line = ensureCable(cable.id)
+      const line = ensureCable(cable)
       line.zIndex(1)
       ensureCableBadge(cable.id)
     })
@@ -167,20 +156,6 @@ export const useCanvasCables = ({ layer, schemaStore }: CanvasCablesOptions) => 
     })
   }
 
-  function getConnectorPoints(from, to) {
-    const dx = to.x - from.x;
-    const dy = to.y - from.y;
-    const angle = Math.atan2(-dy, dx);
-
-    const radius = 50;
-
-    return [
-      from.x + -radius * Math.cos(angle + Math.PI),
-      from.y + radius * Math.sin(angle + Math.PI),
-      to.x + -radius * Math.cos(angle),
-      to.y + radius * Math.sin(angle),
-    ];
-  }
 
 
   const syncCableLines = (
@@ -194,11 +169,7 @@ export const useCanvasCables = ({ layer, schemaStore }: CanvasCablesOptions) => 
 
       if (!sourceCenter || !targetCenter) return
       
-      const connectorPoints = getConnectorPoints(sourceCenter, targetCenter)
-      const originPoint = { x: connectorPoints[0], y: connectorPoints[1] }
-      const targetPoint = { x: connectorPoints[2], y: connectorPoints[3] }
-      
-      const points = buildOrthogonalPoints(originPoint, targetPoint)
+      const points = buildOrthogonalPoints(sourceCenter, targetCenter)
       line.setAttr('points', points)
 
       const badge = cableBadgeMap.get(cableId)
@@ -212,10 +183,10 @@ export const useCanvasCables = ({ layer, schemaStore }: CanvasCablesOptions) => 
   const applySelection = (selectedCableId: string | undefined) => {
     lineMap.forEach((line, cableId) => {
       const isSelected = cableId === selectedCableId
-      const stroke = isSelected ? '#d96b3a' : '#2d2a25'
+      const stroke = isSelected ? '#2d2a25' : '#e64141ff'
       line.stroke(stroke)
       line.fill(stroke)
-      line.strokeWidth(isSelected ? 3.5 : 2)
+      // line.strokeWidth(isSelected ? 3.5 : 2)
     })
   }
 

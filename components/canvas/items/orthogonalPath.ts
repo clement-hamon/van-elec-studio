@@ -12,11 +12,30 @@ const resolveAxis = (start: Point, end: Point, axis: PrimaryAxis): 'horizontal' 
   return Math.abs(end.x - start.x) >= Math.abs(end.y - start.y) ? 'horizontal' : 'vertical'
 }
 
+export function getConnectorPoints(from, to) {
+  const dx = to.x - from.x;
+  const dy = to.y - from.y;
+  const angle = Math.atan2(-dy, dx);
+  const radius = 50;
+
+  return [
+    from.x + -radius * Math.cos(angle + Math.PI),
+    from.y + radius * Math.sin(angle + Math.PI),
+    to.x + -radius * Math.cos(angle),
+    to.y + radius * Math.sin(angle),
+  ];
+}
+
 export const buildOrthogonalPoints = (
-  start: Point,
-  end: Point,
+  origin: Point,
+  target: Point,
   axis: PrimaryAxis = 'auto',
 ) => {
+
+  const connectorPoints = getConnectorPoints(origin, target)
+  const start = { x: connectorPoints[0], y: connectorPoints[1] }
+  const end = { x: connectorPoints[2], y: connectorPoints[3] }
+
   if (isAligned(start, end)) {
     return [start.x, start.y, end.x, end.y]
   }
