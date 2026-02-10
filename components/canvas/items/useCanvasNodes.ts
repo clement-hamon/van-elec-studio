@@ -12,17 +12,9 @@ type CanvasNodesOptions = {
   onRequestSyncCables: () => void
 }
 
-const defaultNodeImageUrl = '/icons/mppt.svg'
-const dcDcNodeImageUrl = '/icons/dc-dc.svg'
-const alternatorNodeImageUrl = '/icons/alternator.svg'
-const batteryNodeImageUrl = '/icons/battery.svg'
-const solarPanelNodeImageUrl = '/icons/solar-panel.svg'
-const ledBarNodeImageUrl = '/icons/led-bar.svg'
-const positiveBusNodeImageUrl = '/icons/positive-bus-bar.svg'
-const shoreInletNodeImageUrl = '/icons/shore-inlet.svg'
-const fuseNodeImageUrl = '/icons/fuse.svg'
-const acDcChargerNodeImageUrl = '/icons/ac-dc-charger.svg'
-const ledLightNodeImageUrl = '/icons/led-light.svg'
+const getAssetPath = (path: string, baseURL: string) => {
+  return baseURL.endsWith('/') ? `${baseURL}${path.slice(1)}` : `${baseURL}${path}`
+}
 
 const nodeImageSize = {
   width: Math.round(64 * NODE_SCALE),
@@ -38,19 +30,21 @@ const nodeHaloRadius = nodeImageSize.width / 2 + Math.round(10 * NODE_SCALE)
 
 const nodeImageCache = new Map<string, HTMLImageElement>()
 
-const iconUrlForComponent = (component: ComponentInstance) => {
-  if (component.typeId === 'dc-dc-charger') return dcDcNodeImageUrl
-  if (component.typeId === 'alternator') return alternatorNodeImageUrl
-  if (component.typeId === 'battery') return batteryNodeImageUrl
-  if (component.typeId === 'dc-bus') return positiveBusNodeImageUrl
-  if (component.typeId === 'shore-inlet') return shoreInletNodeImageUrl
-  if (component.typeId === 'solar-panel') return solarPanelNodeImageUrl
-  if (component.typeId === 'fuse') return fuseNodeImageUrl
-  if (component.typeId === 'ac-dc-charger') return acDcChargerNodeImageUrl
-  if (component.typeId === 'led-light') return ledLightNodeImageUrl
-  if (component.typeId === 'light-bar') return ledBarNodeImageUrl
+const iconUrlForComponent = (component: ComponentInstance, baseURL: string) => {
+  const getPath = (path: string) => getAssetPath(path, baseURL)
+  
+  if (component.typeId === 'dc-dc-charger') return getPath('/icons/dc-dc.svg')
+  if (component.typeId === 'alternator') return getPath('/icons/alternator.svg')
+  if (component.typeId === 'battery') return getPath('/icons/battery.svg')
+  if (component.typeId === 'dc-bus') return getPath('/icons/positive-bus-bar.svg')
+  if (component.typeId === 'shore-inlet') return getPath('/icons/shore-inlet.svg')
+  if (component.typeId === 'solar-panel') return getPath('/icons/solar-panel.svg')
+  if (component.typeId === 'fuse') return getPath('/icons/fuse.svg')
+  if (component.typeId === 'ac-dc-charger') return getPath('/icons/ac-dc-charger.svg')
+  if (component.typeId === 'led-light') return getPath('/icons/led-light.svg')
+  if (component.typeId === 'light-bar') return getPath('/icons/led-bar.svg')
 
-  return defaultNodeImageUrl
+  return getPath('/icons/mppt.svg')
 }
 
 const ensureNodeImage = (layer: Konva.Layer, url: string) => {
@@ -72,6 +66,8 @@ export const useCanvasNodes = ({
   pendingSourceId,
   onRequestSyncCables,
 }: CanvasNodesOptions) => {
+  const config = useRuntimeConfig()
+  const baseURL = config.app.baseURL
   const nodeMap = new Map<string, Konva.Group>()
 
   const getNodeCenter = (nodeId: string) => {
@@ -138,7 +134,7 @@ export const useCanvasNodes = ({
       name: 'issue-badge',
     })
 
-    const iconUrl = iconUrlForComponent(component)
+    const iconUrl = iconUrlForComponent(component, baseURL)
     const imageElement = ensureNodeImage(layer, iconUrl)
     const image = new Konva.Image({
       x: nodeImageOffset.x,
@@ -249,7 +245,7 @@ export const useCanvasNodes = ({
       node.position({ x: component.position.x, y: component.position.y })
       const title = node.findOne<Konva.Text>('.node-title')
       if (title) title.text(component.name || component.id)
-      const nextIconUrl = iconUrlForComponent(component)
+      const nextIconUrl = iconUrlForComponent(component, baseURL)
       const currentIconUrl = node.getAttr('iconUrl')
       if (currentIconUrl !== nextIconUrl) {
         const image = node.findOne<Konva.Image>('.node-image')
@@ -306,8 +302,8 @@ export const useCanvasNodes = ({
     applySelection,
     applyIssueBadges,
     ensureAssets: () => {
-      ensureNodeImage(layer, defaultNodeImageUrl)
-      ensureNodeImage(layer, dcDcNodeImageUrl)
+      ensureNodeImage(layer, getAssetPath('/icons/mppt.svg', baseURL))
+      ensureNodeImage(layer, getAssetPath('/icons/dc-dc.svg', baseURL))
     },
   }
 }
