@@ -279,25 +279,6 @@ body {
   gap: 10px;
 }
 
-.canvas-zoom__header {
-  display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-}
-
-.canvas-zoom__label {
-  font-size: 0.65rem;
-  letter-spacing: 0.2em;
-  text-transform: uppercase;
-  color: #6a635c;
-}
-
-.canvas-zoom__value {
-  font-size: 0.85rem;
-  font-weight: 600;
-  color: #2d2a25;
-}
-
 .canvas-zoom__controls {
   display: grid;
   grid-template-columns: 32px 1fr 32px;

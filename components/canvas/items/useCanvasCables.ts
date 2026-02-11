@@ -15,6 +15,12 @@ const CABLE_POINTER_LENGTH = 10
 const CABLE_POINTER_WIDTH = 8
 const CABLE_CORNER_RADIUS = 16
 const CABLE_WIDTH_SCALE = 0.7 // Adjust this to make all cables thicker (>1.0) or thinner (<1.0)
+const CABLE_GAUGE_HINT_FONT_SIZE = 14
+const CABLE_GAUGE_HINT_COLOR = '#e64141ff'
+const CABLE_GAUGE_HINT_BG = '#F9F7F2'
+const CABLE_GAUGE_HINT_PADDING_X = 6
+const CABLE_GAUGE_HINT_PADDING_Y = 3
+const CABLE_GAUGE_HINT_RADIUS = 6
 
 const drawRoundedPath = (context, points: number[], radius: number) => {
   if (points.length < 4) return
@@ -47,6 +53,46 @@ const drawRoundedPath = (context, points: number[], radius: number) => {
   context.lineTo(points[points.length - 2], points[points.length - 1])
 }
 
+const getPolylineMidpointWithAngle = (points: number[]) => {
+  if (points.length < 4) return { x: 0, y: 0, angle: 0 }
+
+  let totalLength = 0
+  for (let index = 0; index < points.length - 2; index += 2) {
+    const dx = points[index + 2] - points[index]
+    const dy = points[index + 3] - points[index + 1]
+    totalLength += Math.hypot(dx, dy)
+  }
+
+  let remaining = totalLength / 2
+  for (let index = 0; index < points.length - 2; index += 2) {
+    const x1 = points[index]
+    const y1 = points[index + 1]
+    const x2 = points[index + 2]
+    const y2 = points[index + 3]
+    const segmentLength = Math.hypot(x2 - x1, y2 - y1)
+
+    if (segmentLength === 0) continue
+
+    if (remaining <= segmentLength) {
+      const ratio = remaining / segmentLength
+      const isVertical = Math.abs(y2 - y1) > Math.abs(x2 - x1)
+      return {
+        x: x1 + (x2 - x1) * ratio,
+        y: y1 + (y2 - y1) * ratio,
+        angle: isVertical ? 90 : 0,
+      }
+    }
+
+    remaining -= segmentLength
+  }
+
+  return {
+    x: points[points.length - 2],
+    y: points[points.length - 1],
+    angle: 0,
+  }
+}
+
 type CanvasCablesOptions = {
   layer: Konva.Layer
   schemaStore: ReturnType<typeof useSchemaStore>
@@ -75,6 +121,7 @@ const getCableLineStrokeWidth = (gaugeAwg: number) => {
 export const useCanvasCables = ({ layer, schemaStore }: CanvasCablesOptions) => {
   const lineMap = new Map<string, Konva.Shape>()
   const cableBadgeMap = new Map<string, Konva.Circle>()
+  const cableGaugeMap = new Map<string, Konva.Group>()
 
   const ensureCableBadge = (cableId: string) => {
     const existing = cableBadgeMap.get(cableId)
@@ -92,6 +139,43 @@ export const useCanvasCables = ({ layer, schemaStore }: CanvasCablesOptions) => 
     layer.add(badge)
     badge.zIndex(2)
     return badge
+  }
+
+  const ensureCableGaugeLabel = (cable: Cable) => {
+    const existing = cableGaugeMap.get(cable.id)
+    if (existing) return existing
+
+    const label = new Konva.Group({
+      listening: false,
+    })
+
+    const background = new Konva.Rect({
+      fill: CABLE_GAUGE_HINT_BG,
+      opacity: 0.9,
+      cornerRadius: CABLE_GAUGE_HINT_RADIUS,
+      listening: false,
+      name: 'cable-gauge-bg',
+    })
+
+    const text = new Konva.Text({
+      text: `⌀${cable.props.gaugeAwg}`,
+      fontSize: CABLE_GAUGE_HINT_FONT_SIZE,
+      fontFamily: 'Space Grotesk, sans-serif',
+      fill: CABLE_GAUGE_HINT_COLOR,
+      stroke: CABLE_GAUGE_HINT_COLOR,
+      strokeWidth: 1,
+      opacity: 0.9,
+      listening: false,
+      name: 'cable-gauge-text',
+    })
+
+    label.add(background)
+    label.add(text)
+
+    cableGaugeMap.set(cable.id, label)
+    layer.add(label)
+    label.zIndex(2)
+    return label
   }
 
   const ensureCable = (cable: Cable) => {
@@ -137,6 +221,7 @@ export const useCanvasCables = ({ layer, schemaStore }: CanvasCablesOptions) => 
       const line = ensureCable(cable)
       line.zIndex(1)
       ensureCableBadge(cable.id)
+      ensureCableGaugeLabel(cable)
     })
   }
 
@@ -152,6 +237,13 @@ export const useCanvasCables = ({ layer, schemaStore }: CanvasCablesOptions) => 
       if (!currentCableIds.has(cableId)) {
         badge.destroy()
         cableBadgeMap.delete(cableId)
+      }
+    })
+
+    cableGaugeMap.forEach((label, cableId) => {
+      if (!currentCableIds.has(cableId)) {
+        label.destroy()
+        cableGaugeMap.delete(cableId)
       }
     })
   }
@@ -173,9 +265,27 @@ export const useCanvasCables = ({ layer, schemaStore }: CanvasCablesOptions) => 
       line.setAttr('points', points)
 
       const badge = cableBadgeMap.get(cableId)
-      if (badge) {
-        const midPoint = getPolylineMidpoint(points)
-        badge.position(midPoint)
+      const midPoint = getPolylineMidpoint(points)
+      if (badge) badge.position(midPoint)
+
+      const gaugeLabel = cableGaugeMap.get(cableId)
+      if (gaugeLabel) {
+        const textNode = gaugeLabel.findOne<Konva.Text>('.cable-gauge-text')
+        const backgroundNode = gaugeLabel.findOne<Konva.Rect>('.cable-gauge-bg')
+        if (!textNode || !backgroundNode) return
+        const gaugeText = `⌀${cable.props.gaugeAwg}`
+        if (textNode.text() !== gaugeText) textNode.text(gaugeText)
+        const { x, y, angle } = getPolylineMidpointWithAngle(points)
+        const textWidth = textNode.getTextWidth()
+        const textHeight = textNode.height() || textNode.fontSize()
+        const paddedWidth = textWidth + CABLE_GAUGE_HINT_PADDING_X * 2
+        const paddedHeight = textHeight + CABLE_GAUGE_HINT_PADDING_Y * 2
+        backgroundNode.size({ width: paddedWidth, height: paddedHeight })
+        textNode.position({ x: CABLE_GAUGE_HINT_PADDING_X, y: CABLE_GAUGE_HINT_PADDING_Y })
+        gaugeLabel.offsetX(paddedWidth / 2)
+        gaugeLabel.offsetY(paddedHeight / 2)
+        gaugeLabel.position({ x, y })
+        gaugeLabel.rotation(angle)
       }
     })
   }

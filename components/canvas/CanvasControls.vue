@@ -1,9 +1,5 @@
 <template>
   <div class="canvas-zoom" aria-label="Canvas zoom controls">
-    <div class="canvas-zoom__header">
-      <span class="canvas-zoom__label">Zoom</span>
-      <span class="canvas-zoom__value">{{ zoomPercent }}%</span>
-    </div>
     <div class="canvas-zoom__controls">
       <button
         class="canvas-zoom__btn"
@@ -37,7 +33,6 @@
     <button class="canvas-zoom__reset" type="button" @click="emit('reset-view')">
       Reset view
     </button>
-    <p class="canvas-zoom__hint">Drag the canvas to move around.</p>
   </div>
 </template>
 
