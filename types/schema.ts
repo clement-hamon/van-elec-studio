@@ -127,6 +127,8 @@ export type Cable = {
   name: string
   sourceId: Id
   targetId: Id
+  sourcePortId?: Id
+  targetPortId?: Id
   props: CableProps
   derived: CableDerived
 }
@@ -163,7 +165,15 @@ export type SchemaState = {
   cables: Cable[]
   groups: Group[]
   selection: SelectionState
+  scenario?: ScenarioState
   updatedAt: string
+}
+
+export type ScenarioState = {
+  enabledNodes?: Record<Id, boolean>
+  domainVoltage?: Record<string, number>
+  dispatchPolicy?: 'priority_order' | 'share_proportionally'
+  sourcePriority?: Id[]
 }
 
 export type SelectionState = {

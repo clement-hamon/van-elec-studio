@@ -21,6 +21,13 @@ const CABLE_GAUGE_HINT_BG = '#F9F7F2'
 const CABLE_GAUGE_HINT_PADDING_X = 6
 const CABLE_GAUGE_HINT_PADDING_Y = 3
 const CABLE_GAUGE_HINT_RADIUS = 6
+const CABLE_FLOW_FONT_SIZE = 12
+const CABLE_FLOW_COLOR = '#2d2a25'
+const CABLE_FLOW_BG = '#fffaf2'
+const CABLE_FLOW_PADDING_X = 6
+const CABLE_FLOW_PADDING_Y = 2
+const CABLE_FLOW_RADIUS = 6
+const CABLE_FLOW_OFFSET = 14
 
 const drawRoundedPath = (context, points: number[], radius: number) => {
   if (points.length < 4) return
@@ -99,7 +106,6 @@ type CanvasCablesOptions = {
 }
 
 const getCableLineStrokeWidth = (gaugeAwg: number) => {
-  console.log(`Calculating stroke width for AWG ${gaugeAwg}`)
   // Convert AWG to cross-sectional area in mm²
   const mm2 = awgToMm2(gaugeAwg)
   const minWidth = 1.5 * CABLE_WIDTH_SCALE
@@ -122,6 +128,7 @@ export const useCanvasCables = ({ layer, schemaStore }: CanvasCablesOptions) => 
   const lineMap = new Map<string, Konva.Shape>()
   const cableBadgeMap = new Map<string, Konva.Circle>()
   const cableGaugeMap = new Map<string, Konva.Group>()
+  const cableFlowMap = new Map<string, Konva.Group>()
 
   const ensureCableBadge = (cableId: string) => {
     const existing = cableBadgeMap.get(cableId)
@@ -178,6 +185,40 @@ export const useCanvasCables = ({ layer, schemaStore }: CanvasCablesOptions) => 
     return label
   }
 
+  const ensureCableFlowLabel = (cable: Cable) => {
+    const existing = cableFlowMap.get(cable.id)
+    if (existing) return existing
+
+    const label = new Konva.Group({
+      listening: false,
+    })
+
+    const background = new Konva.Rect({
+      fill: CABLE_FLOW_BG,
+      opacity: 0.92,
+      cornerRadius: CABLE_FLOW_RADIUS,
+      listening: false,
+      name: 'cable-flow-bg',
+    })
+
+    const text = new Konva.Text({
+      text: '0.0A',
+      fontSize: CABLE_FLOW_FONT_SIZE,
+      fontFamily: 'Space Grotesk, sans-serif',
+      fill: CABLE_FLOW_COLOR,
+      listening: false,
+      name: 'cable-flow-text',
+    })
+
+    label.add(background)
+    label.add(text)
+
+    cableFlowMap.set(cable.id, label)
+    layer.add(label)
+    label.zIndex(2)
+    return label
+  }
+
   const ensureCable = (cable: Cable) => {
     const existing = lineMap.get(cable.id)
     if (existing) return existing
@@ -219,9 +260,11 @@ export const useCanvasCables = ({ layer, schemaStore }: CanvasCablesOptions) => 
   const syncCables = (cables: Cable[]) => {
     cables.forEach((cable) => {
       const line = ensureCable(cable)
+      line.strokeWidth(getCableLineStrokeWidth(cable.props.gaugeAwg))
       line.zIndex(1)
       ensureCableBadge(cable.id)
       ensureCableGaugeLabel(cable)
+      ensureCableFlowLabel(cable)
     })
   }
 
@@ -244,6 +287,13 @@ export const useCanvasCables = ({ layer, schemaStore }: CanvasCablesOptions) => 
       if (!currentCableIds.has(cableId)) {
         label.destroy()
         cableGaugeMap.delete(cableId)
+      }
+    })
+
+    cableFlowMap.forEach((label, cableId) => {
+      if (!currentCableIds.has(cableId)) {
+        label.destroy()
+        cableFlowMap.delete(cableId)
       }
     })
   }
@@ -287,6 +337,26 @@ export const useCanvasCables = ({ layer, schemaStore }: CanvasCablesOptions) => 
         gaugeLabel.position({ x, y })
         gaugeLabel.rotation(angle)
       }
+
+      const flowLabel = cableFlowMap.get(cableId)
+      if (flowLabel) {
+        const textNode = flowLabel.findOne<Konva.Text>('.cable-flow-text')
+        const backgroundNode = flowLabel.findOne<Konva.Rect>('.cable-flow-bg')
+        if (!textNode || !backgroundNode) return
+        const { x, y, angle } = getPolylineMidpointWithAngle(points)
+        const textWidth = textNode.getTextWidth()
+        const textHeight = textNode.height() || textNode.fontSize()
+        const paddedWidth = textWidth + CABLE_FLOW_PADDING_X * 2
+        const paddedHeight = textHeight + CABLE_FLOW_PADDING_Y * 2
+        backgroundNode.size({ width: paddedWidth, height: paddedHeight })
+        textNode.position({ x: CABLE_FLOW_PADDING_X, y: CABLE_FLOW_PADDING_Y })
+        flowLabel.offsetX(paddedWidth / 2)
+        flowLabel.offsetY(paddedHeight / 2)
+        const offsetX = angle === 90 ? CABLE_FLOW_OFFSET : 0
+        const offsetY = angle === 90 ? 0 : -CABLE_FLOW_OFFSET
+        flowLabel.position({ x: x + offsetX, y: y + offsetY })
+        flowLabel.rotation(0)
+      }
     })
   }
 
@@ -312,6 +382,63 @@ export const useCanvasCables = ({ layer, schemaStore }: CanvasCablesOptions) => 
     })
   }
 
+  const applyFlowIndicators = () => {
+    const flow = schemaStore.flow
+    lineMap.forEach((line, cableId) => {
+      const cable = schemaStore.schema.cables.find((item) => item.id === cableId)
+      if (!cable) return
+      const edgeFlow = flow?.edges?.[cableId]
+      const currentA = edgeFlow?.currentA ?? 0
+      const magnitude = Math.abs(currentA)
+      const arrow = currentA >= 0 ? '→' : '←'
+      const label = cableFlowMap.get(cableId)
+
+      if (label) {
+        const textNode = label.findOne<Konva.Text>('.cable-flow-text')
+        const backgroundNode = label.findOne<Konva.Rect>('.cable-flow-bg')
+        if (textNode) {
+          textNode.text(magnitude > 0.05 ? `${arrow} ${magnitude.toFixed(1)}A` : '0.0A')
+        }
+        if (textNode && backgroundNode) {
+          const textWidth = textNode.getTextWidth()
+          const textHeight = textNode.height() || textNode.fontSize()
+          const paddedWidth = textWidth + CABLE_FLOW_PADDING_X * 2
+          const paddedHeight = textHeight + CABLE_FLOW_PADDING_Y * 2
+          backgroundNode.size({ width: paddedWidth, height: paddedHeight })
+          textNode.position({ x: CABLE_FLOW_PADDING_X, y: CABLE_FLOW_PADDING_Y })
+          label.offsetX(paddedWidth / 2)
+          label.offsetY(paddedHeight / 2)
+        }
+        const showLabel = magnitude > 0.01 || schemaStore.schema.selection.cableId === cableId
+        label.visible(showLabel)
+      }
+
+      const utilization = edgeFlow?.utilization ?? 0
+      const limited = edgeFlow?.limitedBy && edgeFlow.limitedBy.length > 0
+      const isSelected = schemaStore.schema.selection.cableId === cableId
+      let stroke = '#e64141ff'
+      if (limited || utilization >= 1) {
+        stroke = '#d96b3a'
+      } else if (utilization >= 0.8) {
+        stroke = '#f2b46d'
+      } else if (magnitude < 0.01) {
+        stroke = '#c9b8a6'
+      }
+      if (isSelected) {
+        stroke = '#2d2a25'
+      }
+
+      const disabled =
+        !schemaStore.isComponentEnabled(cable.sourceId) ||
+        !schemaStore.isComponentEnabled(cable.targetId)
+
+      line.stroke(stroke)
+      line.fill(stroke)
+      line.opacity(disabled ? 0.35 : 1)
+      label?.opacity(disabled ? 0.35 : 1)
+    })
+  }
+
   return {
     lineMap,
     cableBadgeMap,
@@ -320,5 +447,6 @@ export const useCanvasCables = ({ layer, schemaStore }: CanvasCablesOptions) => 
     syncCableLines,
     applySelection,
     applyIssueBadges,
+    applyFlowIndicators,
   }
 }

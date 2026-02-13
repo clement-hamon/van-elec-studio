@@ -1,8 +1,7 @@
 import { defineStore } from 'pinia'
 import { computeCableDerived } from '~/services/cable'
-import { computeCablePower } from '~/services/power-flow'
-import { runValidation } from '~/services/validation'
-import { computeChargeSummary } from '~/services/charging'
+import { computeEdgePower, computeFlowForSchema, ensureCablePorts } from '~/services/graph-flow'
+import type { FlowOutput } from '~/services/flow-engine'
 import { componentRegistry } from '~/src/domain/components/registry'
 import { getHistoryDepth, loadSchema, saveSchema, undoSchema } from '~/services/storage'
 import type {
@@ -33,97 +32,28 @@ const buildCable = (
   ),
 })
 
-const applyCableDerived = (schema: SchemaState, registry: ComponentType[]): SchemaState => {
-  const powerMap = computeCablePower(schema, registry)
-
-  return {
-    ...schema,
-    cables: schema.cables.map((cable) => buildCable(cable, powerMap.get(cable.id))),
-  }
-}
-
-const applyComponentDerived = (schema: SchemaState, registry: ComponentType[]): SchemaState => {
-  const typeById = new Map(registry.map((type) => [type.id, type]))
-  return {
-    ...schema,
-    components: schema.components.map((component) => {
-      const type = typeById.get(component.typeId)
-      if (!type) return component
-      const derived = { ...component.derived }
-      if (
-        typeof derived.maxCurrentA !== 'number' &&
-        typeof type.constraints?.maxCurrent === 'number'
-      ) {
-        derived.maxCurrentA = type.constraints.maxCurrent
-      }
-      if (!derived.voltageDomain && type.constraints?.voltageDomain) {
-        derived.voltageDomain = type.constraints.voltageDomain
-      }
-      return { ...component, derived }
-    }),
-  }
-}
-
-const applyDefaultProps = (schema: SchemaState, registry: ComponentType[]): SchemaState => {
-  const typeById = new Map(registry.map((type) => [type.id, type]))
-  return {
-    ...schema,
-    components: schema.components.map((component) => {
-      const type = typeById.get(component.typeId)
-      if (!type) return component
-      const props = { ...component.props }
-      const isBattery = type.chargePathRole === 'battery' || type.id === 'battery'
-      if (isBattery) {
-        if (props.outputVoltage === undefined || props.outputVoltage === null) {
-          if (typeof props.voltage === 'number') {
-            props.outputVoltage = props.voltage
-          } else if (typeof props.operatingVoltage === 'number') {
-            props.outputVoltage = props.operatingVoltage
-          }
-        }
-        if (props.maxInputVoltage === undefined || props.maxInputVoltage === null) {
-          if (typeof props.chargeCutoffVoltage === 'number') {
-            props.maxInputVoltage = props.chargeCutoffVoltage
-          } else if (typeof props.recommendedChargeVoltage === 'number') {
-            props.maxInputVoltage = props.recommendedChargeVoltage
-          }
-        }
-        if ('voltage' in props) {
-          delete props.voltage
-        }
-        if ('operatingVoltage' in props) {
-          delete props.operatingVoltage
-        }
-      }
-      Object.entries(type.defaultProps).forEach(([key, value]) => {
-        if (props[key] === undefined || props[key] === null) {
-          props[key] = value
-        }
-      })
-      return { ...component, props }
-    }),
-  }
-}
-
-const applyChargingDerived = (schema: SchemaState, registry: ComponentType[]): SchemaState => {
-  const summaries = computeChargeSummary(schema, registry)
-  if (summaries.size === 0) return schema
-
-  return {
-    ...schema,
-    components: schema.components.map((component) => {
-      const summary = summaries.get(component.id)
-      if (!summary) return component
-      return {
-        ...component,
-        derived: {
-          ...component.derived,
-          chargeAvailableA: summary.availableCurrentA,
-          chargeEffectiveA: summary.effectiveCurrentA,
-          timeToFullH: summary.timeToFullHours ?? 'n/a',
-        },
-      }
-    }),
+const applyCableDerived = (
+  schema: SchemaState,
+  registry: ComponentType[],
+): { schema: SchemaState; flow: FlowOutput | null } => {
+  try {
+    const { flow, edgeMeta } = computeFlowForSchema(schema, registry)
+    return {
+      schema: {
+        ...schema,
+        cables: schema.cables.map((cable) => buildCable(cable, computeEdgePower(cable, flow, edgeMeta))),
+      },
+      flow,
+    }
+  } catch (error) {
+    console.error('Flow engine failed to compute flow', error)
+    return {
+      schema: {
+        ...schema,
+        cables: schema.cables.map((cable) => buildCable(cable)),
+      },
+      flow: null,
+    }
   }
 }
 
@@ -158,6 +88,8 @@ const defaultSchema = (): SchemaState => ({
       name: 'Main Feed',
       sourceId: 'comp-1',
       targetId: 'comp-2',
+      sourcePortId: 'positive',
+      targetPortId: 'in',
       props: { lengthM: 2, gaugeAwg: 6 },
       derived: {
         ampacityA: 0,
@@ -172,6 +104,11 @@ const defaultSchema = (): SchemaState => ({
   ],
   groups: [],
   selection: {},
+  scenario: {
+    enabledNodes: {},
+    dispatchPolicy: 'priority_order',
+    sourcePriority: [],
+  },
   updatedAt: nowIso(),
 })
 
@@ -180,27 +117,76 @@ const emptySchema = (): SchemaState => ({
   cables: [],
   groups: [],
   selection: {},
+  scenario: {
+    enabledNodes: {},
+    dispatchPolicy: 'priority_order',
+    sourcePriority: [],
+  },
   updatedAt: nowIso(),
 })
 
-const applyDerivedAll = (schema: SchemaState, registry: ComponentType[]) =>
-  applyChargingDerived(
-    applyCableDerived(applyComponentDerived(schema, registry), registry),
-    registry,
-  )
+const applyDerivedAll = (
+  schema: SchemaState,
+  registry: ComponentType[],
+): { schema: SchemaState; flow: FlowOutput | null } => {
+  const withScenario =
+    schema.scenario
+      ? schema
+      : {
+          ...schema,
+          scenario: {
+            enabledNodes: {},
+            dispatchPolicy: 'priority_order',
+            sourcePriority: [],
+          },
+        }
+  const withPorts = ensureCablePorts(withScenario, registry)
+  const { schema: withCables, flow } = applyCableDerived(withPorts, registry)
+  return { schema: withCables, flow }
+}
+
+const flowDiagnosticsToIssues = (flow: FlowOutput | null): Issue[] => {
+  if (!flow) return []
+  const issues: Issue[] = []
+  flow.diagnostics.forEach((diagnostic, index) => {
+    const ref = diagnostic.refs?.find((item) => item.edgeId || item.nodeId)
+    if (!ref) return
+    if (ref.edgeId && ref.edgeId.startsWith('__internal_')) return
+    const rawId = (ref.edgeId ?? ref.nodeId) as string
+    const targetId = rawId.startsWith('__battery_converter_')
+      ? rawId.replace('__battery_converter_', '')
+      : rawId
+    const targetType = ref.edgeId ? 'cable' : 'component'
+    issues.push({
+      id: `flow-${diagnostic.code}-${targetId}-${index}`,
+      level:
+        diagnostic.severity === 'error'
+          ? 'error'
+          : diagnostic.severity === 'warning'
+            ? 'warning'
+            : 'info',
+      message: diagnostic.message,
+      targetType,
+      targetId,
+      category: 'Flow',
+    })
+  })
+  return issues
+}
 
 const hydrateSchema = (registry: ComponentType[]) => {
   const saved = loadSchema()
   const base = saved ?? defaultSchema()
-  return applyDerivedAll(applyDefaultProps(base, registry), registry)
+  return applyDerivedAll(base, registry)
 }
 
 export const useSchemaStore = defineStore('schema', {
   state: () => {
-    const schema = hydrateSchema(componentRegistry)
+    const { schema, flow } = hydrateSchema(componentRegistry)
     return {
       schema,
-      issues: runValidation(schema, componentRegistry),
+      flow,
+      issues: flowDiagnosticsToIssues(flow),
       registry: componentRegistry,
       historyDepth: getHistoryDepth(),
     }
@@ -214,6 +200,8 @@ export const useSchemaStore = defineStore('schema', {
     selectedCable(state) {
       return state.schema.cables.find((cable) => cable.id === state.schema.selection.cableId)
     },
+    isComponentEnabled: (state) => (id: string) =>
+      state.schema.scenario?.enabledNodes?.[id] !== false,
   },
   actions: {
     addComponentFromType(typeId: string, position?: { x: number; y: number }) {
@@ -242,25 +230,60 @@ export const useSchemaStore = defineStore('schema', {
       })
     },
     refreshValidation() {
-      this.schema = applyDerivedAll(this.schema, this.registry)
-      this.issues = runValidation(this.schema, this.registry)
+      const { schema, flow } = applyDerivedAll(this.schema, this.registry)
+      this.schema = schema
+      this.flow = flow
+      this.issues = flowDiagnosticsToIssues(flow)
       this.scheduleSave()
     },
     reset() {
-      this.schema = applyDerivedAll(defaultSchema(), this.registry)
-      this.refreshValidation()
+      const { schema, flow } = applyDerivedAll(defaultSchema(), this.registry)
+      this.schema = schema
+      this.flow = flow
+      this.issues = flowDiagnosticsToIssues(flow)
+      this.scheduleSave()
     },
     clearSchema() {
-      this.schema = applyDerivedAll(emptySchema(), this.registry)
-      this.refreshValidation()
+      const { schema, flow } = applyDerivedAll(emptySchema(), this.registry)
+      this.schema = schema
+      this.flow = flow
+      this.issues = flowDiagnosticsToIssues(flow)
+      this.scheduleSave()
     },
     undo() {
       const previous = undoSchema()
       if (!previous) return false
-      this.schema = applyDerivedAll(previous, this.registry)
-      this.issues = runValidation(this.schema, this.registry)
+      const { schema, flow } = applyDerivedAll(previous, this.registry)
+      this.schema = schema
+      this.flow = flow
+      this.issues = flowDiagnosticsToIssues(flow)
       this.historyDepth = getHistoryDepth()
       return true
+    },
+    setComponentEnabled(id: string, enabled: boolean) {
+      const scenario = this.schema.scenario ?? {
+        enabledNodes: {},
+        dispatchPolicy: 'priority_order',
+        sourcePriority: [],
+      }
+      const existing = scenario.enabledNodes ?? {}
+      const enabledNodes = enabled
+        ? Object.fromEntries(Object.entries(existing).filter(([key]) => key !== id))
+        : { ...existing, [id]: false }
+
+      this.schema.scenario = { ...scenario, enabledNodes }
+      this.schema.updatedAt = nowIso()
+      this.refreshValidation()
+    },
+    swapCableDirection(id: string) {
+      const cable = this.schema.cables.find((item) => item.id === id)
+      if (!cable) return
+      this.updateCable(id, {
+        sourceId: cable.targetId,
+        targetId: cable.sourceId,
+        sourcePortId: cable.targetPortId,
+        targetPortId: cable.sourcePortId,
+      })
     },
     setSelection(payload: { componentId?: string; cableId?: string; groupId?: string }) {
       this.schema.selection = payload
@@ -320,8 +343,10 @@ export const useSchemaStore = defineStore('schema', {
       const saved = loadSchema()
       this.historyDepth = getHistoryDepth()
       if (!saved) return false
-      this.schema = applyDerivedAll(saved, this.registry)
-      this.issues = runValidation(this.schema, this.registry)
+      const { schema, flow } = applyDerivedAll(saved, this.registry)
+      this.schema = schema
+      this.flow = flow
+      this.issues = flowDiagnosticsToIssues(flow)
       return true
     },
     saveNow() {

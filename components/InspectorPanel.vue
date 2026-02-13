@@ -45,14 +45,29 @@
       </div>
     </section>
 
-    <section v-if="showChargeSummary" class="inspector-section">
-      <div class="inspector-section-title">Charge Summary</div>
-      <div class="field field-readonly">
-        <div class="derived">
-          <div>Available current: {{ chargeAvailableA }} A</div>
-          <div>Effective current: {{ chargeEffectiveA }} A</div>
-          <div>Time to full: {{ chargeTimeToFull }}</div>
+    <section v-if="selectedComponent" class="inspector-section">
+      <div class="inspector-section-title">Ports</div>
+      <div v-if="componentPorts.length === 0" class="empty-state">
+        No ports defined for this component.
+      </div>
+      <div v-else class="port-list">
+        <div v-for="port in componentPorts" :key="port.id" class="port-row">
+          <div class="port-label">
+            {{ port.label }} <span class="port-id">({{ port.id }})</span>
+          </div>
+          <div class="port-meta">{{ port.direction }} · {{ port.domain.toUpperCase() }}</div>
         </div>
+      </div>
+    </section>
+
+    <section v-if="showScenarioToggle" class="inspector-section">
+      <div class="inspector-section-title">Scenario</div>
+      <div class="field field-inline">
+        <label>Enabled</label>
+        <label class="toggle">
+          <input v-model="componentEnabled" type="checkbox">
+          <span>{{ componentEnabled ? 'On' : 'Off' }}</span>
+        </label>
       </div>
     </section>
 
@@ -61,6 +76,42 @@
       <div class="field">
         <label for="cable-name">Cable Name</label>
         <input id="cable-name" v-model="cableName" type="text" >
+      </div>
+      <div class="field">
+        <label for="cable-source-port">Source Port</label>
+        <select
+          id="cable-source-port"
+          :value="cableSourcePortId"
+          :disabled="sourcePortOptions.length === 0"
+          @change="onSourcePortChange"
+        >
+          <option v-if="sourcePortOptions.length === 0" value="">No ports</option>
+          <option
+            v-for="option in sourcePortOptions"
+            :key="option.value"
+            :value="option.value"
+          >
+            {{ option.label }}
+          </option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="cable-target-port">Target Port</label>
+        <select
+          id="cable-target-port"
+          :value="cableTargetPortId"
+          :disabled="targetPortOptions.length === 0"
+          @change="onTargetPortChange"
+        >
+          <option v-if="targetPortOptions.length === 0" value="">No ports</option>
+          <option
+            v-for="option in targetPortOptions"
+            :key="option.value"
+            :value="option.value"
+          >
+            {{ option.label }}
+          </option>
+        </select>
       </div>
       <div class="field">
         <label for="length">Cable Length (m)</label>
@@ -144,15 +195,62 @@ const componentType = computed(() => {
   return schemaStore.registry.find((item) => item.id === selectedComponent.value?.typeId) ?? null
 })
 
+const componentPorts = computed(() => componentType.value?.ports ?? [])
+
+const showScenarioToggle = computed(() => {
+  const type = componentType.value
+  if (!type) return false
+  if (type.category === 'load' || type.energyRole === 'load') return true
+  if (type.energyRole === 'charger') return true
+  if (type.chargePathRole === 'charger' || type.chargePathRole === 'controller') return true
+  return false
+})
+
+const componentEnabled = computed({
+  get: () => (selectedComponent.value ? schemaStore.isComponentEnabled(selectedComponent.value.id) : true),
+  set: (value: boolean) => {
+    if (!selectedComponent.value) return
+    schemaStore.setComponentEnabled(selectedComponent.value.id, value)
+  },
+})
+
 const cableDirectionLabel = computed(() => {
   if (!selectedCable.value) return ''
-  return `${selectedCable.value.sourceId} → ${selectedCable.value.targetId}`
+  const sourcePort = selectedCable.value.sourcePortId ? `:${selectedCable.value.sourcePortId}` : ''
+  const targetPort = selectedCable.value.targetPortId ? `:${selectedCable.value.targetPortId}` : ''
+  return `${selectedCable.value.sourceId}${sourcePort} → ${selectedCable.value.targetId}${targetPort}`
 })
 
 const componentFields = computed(() => componentType.value?.fields ?? [])
-const showChargeSummary = computed(
-  () => componentType.value?.chargePathRole === 'battery' || componentType.value?.id === 'battery',
-)
+
+const sourceComponent = computed(() => {
+  if (!selectedCable.value) return null
+  return schemaStore.schema.components.find((component) => component.id === selectedCable.value?.sourceId) ?? null
+})
+
+const targetComponent = computed(() => {
+  if (!selectedCable.value) return null
+  return schemaStore.schema.components.find((component) => component.id === selectedCable.value?.targetId) ?? null
+})
+
+const sourcePortOptions = computed(() => {
+  const component = sourceComponent.value
+  if (!component) return []
+  const type = schemaStore.registry.find((item) => item.id === component.typeId)
+  if (!type) return []
+  return type.ports.map((port) => ({ value: port.id, label: `${port.label} (${port.id})` }))
+})
+
+const targetPortOptions = computed(() => {
+  const component = targetComponent.value
+  if (!component) return []
+  const type = schemaStore.registry.find((item) => item.id === component.typeId)
+  if (!type) return []
+  return type.ports.map((port) => ({ value: port.id, label: `${port.label} (${port.id})` }))
+})
+
+const cableSourcePortId = computed(() => selectedCable.value?.sourcePortId ?? '')
+const cableTargetPortId = computed(() => selectedCable.value?.targetPortId ?? '')
 
 const componentName = computed({
   get: () => selectedComponent.value?.name ?? '',
@@ -198,25 +296,6 @@ const onComponentFieldInput = (field: ComponentFieldDefinition, event: Event) =>
     props: { ...selectedComponent.value.props, [field.key]: value },
   })
 }
-
-const chargeAvailableA = computed(() => {
-  const value = selectedComponent.value?.derived?.chargeAvailableA
-  if (typeof value === 'number') return value.toFixed(1)
-  return '0.0'
-})
-
-const chargeEffectiveA = computed(() => {
-  const value = selectedComponent.value?.derived?.chargeEffectiveA
-  if (typeof value === 'number') return value.toFixed(1)
-  return '0.0'
-})
-
-const chargeTimeToFull = computed(() => {
-  const value = selectedComponent.value?.derived?.timeToFullH
-  if (typeof value === 'number') return `${value.toFixed(1)} h`
-  if (typeof value === 'string') return value
-  return 'n/a'
-})
 
 const cableName = computed({
   get: () => selectedCable.value?.name ?? '',
@@ -267,10 +346,21 @@ const cableVoltageDrop = computed(() =>
 
 const swapCableDirection = () => {
   if (!selectedCable.value) return
-  schemaStore.updateCable(selectedCable.value.id, {
-    sourceId: selectedCable.value.targetId,
-    targetId: selectedCable.value.sourceId,
-  })
+  schemaStore.swapCableDirection(selectedCable.value.id)
+}
+
+const onSourcePortChange = (event: Event) => {
+  if (!selectedCable.value) return
+  const target = event.target as HTMLSelectElement | null
+  if (!target) return
+  schemaStore.updateCable(selectedCable.value.id, { sourcePortId: target.value })
+}
+
+const onTargetPortChange = (event: Event) => {
+  if (!selectedCable.value) return
+  const target = event.target as HTMLSelectElement | null
+  if (!target) return
+  schemaStore.updateCable(selectedCable.value.id, { targetPortId: target.value })
 }
 
 </script>
@@ -289,5 +379,56 @@ const swapCableDirection = () => {
 
 .swap-button:hover {
   background: #ede5d7;
+}
+
+.port-list {
+  display: grid;
+  gap: 8px;
+}
+
+.port-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: rgba(45, 42, 37, 0.05);
+}
+
+.port-label {
+  font-weight: 600;
+  font-size: 0.85rem;
+  color: #2d2a25;
+}
+
+.port-id {
+  font-weight: 500;
+  color: #8a7f75;
+}
+
+.port-meta {
+  font-size: 0.75rem;
+  color: #6a5f55;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.field-inline {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.85rem;
+  color: #2d2a25;
+}
+
+.toggle input {
+  accent-color: #2d2a25;
 }
 </style>

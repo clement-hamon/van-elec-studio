@@ -197,6 +197,7 @@ const initStage = () => {
   resizeObserver.observe(container.value)
 
   items.syncScene()
+  items.applyFlowIndicators()
   registerKeyboardShortcuts()
 }
 
@@ -211,6 +212,16 @@ watch(
   () => {
     if (!layer) return
     items?.applyIssueBadges()
+    layer.batchDraw()
+  },
+  { deep: true },
+)
+
+watch(
+  () => schemaStore.flow,
+  () => {
+    if (!layer) return
+    items?.applyFlowIndicators()
     layer.batchDraw()
   },
   { deep: true },

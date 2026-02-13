@@ -180,11 +180,11 @@ function classifyConverterPorts(node: BaseNode): {
   const maxOutW = typeof node.params?.maxOutW === "number" ? node.params.maxOutW : undefined;
 
   // MVP heuristic:
-  // - choose POS ports with dir "in" or "bidirectional" as input candidate
-  // - choose POS ports with dir "out" or "bidirectional" as output candidate
-  const posPorts = node.ports.filter(p => p.conductor === "POS");
-  const inPos = posPorts.find(p => p.dir === "in") ?? posPorts.find(p => p.dir === "bidirectional");
-  const outPos = posPorts.find(p => p.dir === "out") ?? posPorts.find(p => p.dir === "bidirectional" && p !== inPos);
+  // - choose active conductor ports (POS or L) with dir "in" or "bidirectional" as input candidate
+  // - choose active conductor ports (POS or L) with dir "out" or "bidirectional" as output candidate
+  const activePorts = node.ports.filter(p => p.conductor === "POS" || p.conductor === "L");
+  const inPos = activePorts.find(p => p.dir === "in") ?? activePorts.find(p => p.dir === "bidirectional");
+  const outPos = activePorts.find(p => p.dir === "out") ?? activePorts.find(p => p.dir === "bidirectional" && p !== inPos);
 
   return { inPos, outPos, efficiency: eff, maxOutA, maxOutW, lossModel: "efficiency" };
 }
@@ -380,7 +380,7 @@ function buildDomainComponents(ix: IndexedGraph, netOfPort: Map<PortKey, NetId>,
 
   // Helper: pick a node's primary POS port net for a given domain (MVP: first POS port)
   function pickPrimaryPosNet(node: BaseNode): NetId | undefined {
-    const p = node.ports.find(pp => pp.conductor === "POS");
+    const p = node.ports.find(pp => pp.conductor === "POS" || pp.conductor === "L");
     if (!p) return undefined;
     return netOfPort.get(portKey(node.id, p.id));
   }
@@ -398,7 +398,9 @@ function buildDomainComponents(ix: IndexedGraph, netOfPort: Map<PortKey, NetId>,
     const pB = ix.portByKey.get(kB);
     if (!pA || !pB) continue;
     
-    if (pA.conductor !== "POS" || pB.conductor !== "POS") continue;
+    const activeA = pA.conductor === "POS" || pA.conductor === "L";
+    const activeB = pB.conductor === "POS" || pB.conductor === "L";
+    if (!activeA || !activeB) continue;
     if (pA.domain !== pB.domain) continue;
     
     const netA = netOfPort.get(kA)!;
@@ -575,6 +577,8 @@ function applyConverters(
     if (typeof maxOutW === "number") outCapW = Math.min(outCapW, maxOutW);
     if (typeof maxOutA === "number") outCapW = Math.min(outCapW, maxOutA * Vout);
 
+    const eff = Math.max(0.01, Math.min(1, efficiency));
+
     const outServedW = Math.min(outDemandW, outCapW);
     const outUnservedW = outDemandW - outServedW;
 
@@ -593,16 +597,48 @@ function applyConverters(
     outComp.demandW.set(outNet, outDemandW - outServedW);
 
     // Add required input demand to inNet (power in = power out / eff)
-    const eff = Math.max(0.01, Math.min(1, efficiency));
     const inRequiredW = outServedW / eff;
-
     inComp.demandW.set(inNet, (inComp.demandW.get(inNet) ?? 0) + inRequiredW);
-
     const lossW = inRequiredW - outServedW;
     lossesWByDomain.set(inComp.domain, (lossesWByDomain.get(inComp.domain) ?? 0) + lossW);
 
+    // Optional explicit charge demand (used for split batteries)
+    const chargeDemandA =
+      typeof node.params?.chargeDemandA === "number" ? node.params.chargeDemandA : undefined;
+    const chargeDemandW =
+      typeof node.params?.chargeDemandW === "number" ? node.params.chargeDemandW : undefined;
+
+    let chargeClamped = false;
+    if ((typeof chargeDemandA === "number" && chargeDemandA > 0) || (typeof chargeDemandW === "number" && chargeDemandW > 0)) {
+      const rawChargeOutW =
+        typeof chargeDemandW === "number" ? chargeDemandW : (chargeDemandA as number) * Vout;
+      const remainingCapW = Math.max(0, outCapW - outServedW);
+      const chargeOutW = Math.min(rawChargeOutW, remainingCapW);
+      if (rawChargeOutW - chargeOutW > 1e-6) {
+        chargeClamped = true;
+        diagnostics.push({
+          severity: "warning",
+          code: "CONVERTER_CHARGE_CLAMPED",
+          message: `Converter cannot meet requested charge demand. Served ${chargeOutW.toFixed(
+            1
+          )}W of ${rawChargeOutW.toFixed(1)}W.`,
+          refs: [{ nodeId: node.id, domain: outComp.domain }]
+        });
+      }
+
+      if (chargeOutW > 1e-6) {
+        const chargeInW = chargeOutW / eff;
+        inComp.demandW.set(inNet, (inComp.demandW.get(inNet) ?? 0) + chargeInW);
+        const chargeLossW = chargeInW - chargeOutW;
+        lossesWByDomain.set(inComp.domain, (lossesWByDomain.get(inComp.domain) ?? 0) + chargeLossW);
+      }
+    }
+
+    const clampedBy: string[] = [];
+    if (outUnservedW > 1e-6 || chargeClamped) clampedBy.push("converter.maxOut");
+
     nodeFlows.set(node.id, {
-      clampedBy: outUnservedW > 1e-6 ? ["converter.maxOut"] : undefined
+      clampedBy: clampedBy.length ? clampedBy : undefined
     });
 
     // Note: We did not model where converter gets its input supply (battery vs other sources);
@@ -1008,403 +1044,4 @@ export function computeFlow(input: FlowInput): FlowOutput {
     nodes: nodesOut,
     totals: { byDomain: totalsByDomain }
   };
-}
-
-
-// Test 1: Simple battery -> load (original test)
-const test1: FlowInput = {
-  graph: {
-    nodes: [
-      {
-        id: "bat1",
-        type: "storage",
-        ports: [
-          {id:"p+", domain:"DC_12V", conductor:"POS", dir:"bidirectional"},
-          {id:"p-", domain:"DC_12V", conductor:"NEG", dir:"bidirectional"}
-        ],
-        params: {nominalV: 12.8, maxDischargeA: 200, maxChargeA: 100}
-      },
-      {
-        id: "bus_pos",
-        type: "distribution",
-        ports: [{id:"in", domain:"DC_12V", conductor:"POS", dir:"bidirectional"}],
-        params: {maxA: 300}
-      },
-      {
-        id: "fridge",
-        type: "load",
-        ports: [
-          {id:"in+", domain:"DC_12V", conductor:"POS", dir:"in"},
-          {id:"in-", domain:"DC_12V", conductor:"NEG", dir:"in"}
-        ],
-        params: {watts: 60, dutyCycle: 1.0}
-      },
-    ],
-    edges: [
-      {id:"e1", from:{nodeId:"bat1", portId:"p+"}, to:{nodeId:"bus_pos", portId:"in"}, wire:{maxA:200, lengthM:1}, protection:{fuseA:200}},
-      {id:"e2", from:{nodeId:"bus_pos", portId:"in"}, to:{nodeId:"fridge", portId:"in+"}, wire:{maxA:20, lengthM:5}, protection:{fuseA:15}},
-    ]
-  },
-  scenario: {
-    enabledNodes: {fridge: true, bat1: true},
-    dispatchPolicy: "priority_order",
-    sourcePriority: ["bat1"],
-  }
-};
-
-// Test 2: Multiple loads on same battery
-const test2: FlowInput = {
-  graph: {
-    nodes: [
-      {
-        id: "bat1",
-        type: "storage",
-        ports: [
-          {id:"p+", domain:"DC_12V", conductor:"POS", dir:"bidirectional"},
-          {id:"p-", domain:"DC_12V", conductor:"NEG", dir:"bidirectional"}
-        ],
-        params: {maxDischargeA: 100, maxChargeA: 50}
-      },
-      {
-        id: "busbar",
-        type: "distribution",
-        ports: [{id:"p1", domain:"DC_12V", conductor:"POS", dir:"bidirectional"}],
-        params: {}
-      },
-      {
-        id: "lights",
-        type: "load",
-        ports: [{id:"in+", domain:"DC_12V", conductor:"POS", dir:"in"}],
-        params: {watts: 30}
-      },
-      {
-        id: "fridge",
-        type: "load",
-        ports: [{id:"in+", domain:"DC_12V", conductor:"POS", dir:"in"}],
-        params: {watts: 60}
-      },
-      {
-        id: "water_pump",
-        type: "load",
-        ports: [{id:"in+", domain:"DC_12V", conductor:"POS", dir:"in"}],
-        params: {amps: 5, dutyCycle: 0.3}
-      },
-    ],
-    edges: [
-      {id:"e1", from:{nodeId:"bat1", portId:"p+"}, to:{nodeId:"busbar", portId:"p1"}, wire:{maxA:150}},
-      {id:"e2", from:{nodeId:"busbar", portId:"p1"}, to:{nodeId:"lights", portId:"in+"}, wire:{maxA:10}},
-      {id:"e3", from:{nodeId:"busbar", portId:"p1"}, to:{nodeId:"fridge", portId:"in+"}, wire:{maxA:20}},
-      {id:"e4", from:{nodeId:"busbar", portId:"p1"}, to:{nodeId:"water_pump", portId:"in+"}, wire:{maxA:15}},
-    ]
-  },
-  scenario: {
-    enabledNodes: {lights: true, fridge: true, water_pump: true},
-  }
-};
-
-// Test 3: Solar + Battery with charging scenario
-const test3: FlowInput = {
-  graph: {
-    nodes: [
-      {
-        id: "solar",
-        type: "source",
-        ports: [{id:"out+", domain:"DC_12V", conductor:"POS", dir:"out"}],
-        params: {availableW: 200}
-      },
-      {
-        id: "bat1",
-        type: "storage",
-        ports: [{id:"p+", domain:"DC_12V", conductor:"POS", dir:"bidirectional"}],
-        params: {maxDischargeA: 100, maxChargeA: 40}
-      },
-      {
-        id: "load1",
-        type: "load",
-        ports: [{id:"in+", domain:"DC_12V", conductor:"POS", dir:"in"}],
-        params: {watts: 50}
-      },
-    ],
-    edges: [
-      {id:"e1", from:{nodeId:"solar", portId:"out+"}, to:{nodeId:"bat1", portId:"p+"}, wire:{maxA:50}},
-      {id:"e2", from:{nodeId:"bat1", portId:"p+"}, to:{nodeId:"load1", portId:"in+"}, wire:{maxA:30}},
-    ]
-  },
-  scenario: {
-    sourcePriority: ["solar", "bat1"],
-  }
-};
-
-// Test 4: DC-DC converter scenario (12V to 24V)
-const test4: FlowInput = {
-  graph: {
-    nodes: [
-      {
-        id: "bat_12v",
-        type: "storage",
-        ports: [{id:"p+", domain:"DC_12V", conductor:"POS", dir:"bidirectional"}],
-        params: {maxDischargeA: 100}
-      },
-      {
-        id: "dc_dc_converter",
-        type: "conversion",
-        ports: [
-          {id:"in+", domain:"DC_12V", conductor:"POS", dir:"in"},
-          {id:"out+", domain:"DC_24V", conductor:"POS", dir:"out"}
-        ],
-        params: {efficiency: 0.92, maxOutA: 20}
-      },
-      {
-        id: "load_24v",
-        type: "load",
-        ports: [{id:"in+", domain:"DC_24V", conductor:"POS", dir:"in"}],
-        params: {watts: 200}
-      },
-    ],
-    edges: [
-      {id:"e1", from:{nodeId:"bat_12v", portId:"p+"}, to:{nodeId:"dc_dc_converter", portId:"in+"}, wire:{maxA:100}},
-      {id:"e2", from:{nodeId:"dc_dc_converter", portId:"out+"}, to:{nodeId:"load_24v", portId:"in+"}, wire:{maxA:25}},
-    ]
-  },
-  scenario: {}
-};
-
-// Test 5: Multiple sources with priority dispatch
-const test5: FlowInput = {
-  graph: {
-    nodes: [
-      {
-        id: "shore_power",
-        type: "source",
-        ports: [{id:"out+", domain:"DC_12V", conductor:"POS", dir:"out"}],
-        params: {availableW: 500}
-      },
-      {
-        id: "solar",
-        type: "source",
-        ports: [{id:"out+", domain:"DC_12V", conductor:"POS", dir:"out"}],
-        params: {availableW: 150}
-      },
-      {
-        id: "alternator",
-        type: "source",
-        ports: [{id:"out+", domain:"DC_12V", conductor:"POS", dir:"out"}],
-        params: {maxOutA: 50}
-      },
-      {
-        id: "battery",
-        type: "storage",
-        ports: [{id:"p+", domain:"DC_12V", conductor:"POS", dir:"bidirectional"}],
-        params: {maxDischargeA: 100, maxChargeA: 60}
-      },
-      {
-        id: "busbar",
-        type: "distribution",
-        ports: [{id:"p1", domain:"DC_12V", conductor:"POS", dir:"bidirectional"}],
-        params: {}
-      },
-      {
-        id: "heavy_load",
-        type: "load",
-        ports: [{id:"in+", domain:"DC_12V", conductor:"POS", dir:"in"}],
-        params: {watts: 300}
-      },
-    ],
-    edges: [
-      {id:"e1", from:{nodeId:"shore_power", portId:"out+"}, to:{nodeId:"busbar", portId:"p1"}, wire:{maxA:100}},
-      {id:"e2", from:{nodeId:"solar", portId:"out+"}, to:{nodeId:"busbar", portId:"p1"}, wire:{maxA:30}},
-      {id:"e3", from:{nodeId:"alternator", portId:"out+"}, to:{nodeId:"busbar", portId:"p1"}, wire:{maxA:60}},
-      {id:"e4", from:{nodeId:"battery", portId:"p+"}, to:{nodeId:"busbar", portId:"p1"}, wire:{maxA:120}},
-      {id:"e5", from:{nodeId:"busbar", portId:"p1"}, to:{nodeId:"heavy_load", portId:"in+"}, wire:{maxA:50}},
-    ]
-  },
-  scenario: {
-    dispatchPolicy: "priority_order",
-    sourcePriority: ["shore_power", "solar", "alternator", "battery"],
-  }
-};
-
-// Test 6: Overload scenario (demand exceeds supply)
-const test6: FlowInput = {
-  graph: {
-    nodes: [
-      {
-        id: "small_battery",
-        type: "storage",
-        ports: [{id:"p+", domain:"DC_12V", conductor:"POS", dir:"bidirectional"}],
-        params: {maxDischargeA: 30, maxChargeA: 20}
-      },
-      {
-        id: "huge_load",
-        type: "load",
-        ports: [{id:"in+", domain:"DC_12V", conductor:"POS", dir:"in"}],
-        params: {watts: 500}
-      },
-    ],
-    edges: [
-      {id:"e1", from:{nodeId:"small_battery", portId:"p+"}, to:{nodeId:"huge_load", portId:"in+"}, wire:{maxA:50}},
-    ]
-  },
-  scenario: {}
-};
-
-// Test 7: Proportional dispatch
-const test7: FlowInput = {
-  graph: {
-    nodes: [
-      {
-        id: "source_a",
-        type: "source",
-        ports: [{id:"out+", domain:"DC_12V", conductor:"POS", dir:"out"}],
-        params: {availableW: 100}
-      },
-      {
-        id: "source_b",
-        type: "source",
-        ports: [{id:"out+", domain:"DC_12V", conductor:"POS", dir:"out"}],
-        params: {availableW: 200}
-      },
-      {
-        id: "busbar",
-        type: "distribution",
-        ports: [{id:"p1", domain:"DC_12V", conductor:"POS", dir:"bidirectional"}],
-        params: {}
-      },
-      {
-        id: "load",
-        type: "load",
-        ports: [{id:"in+", domain:"DC_12V", conductor:"POS", dir:"in"}],
-        params: {watts: 150}
-      },
-    ],
-    edges: [
-      {id:"e1", from:{nodeId:"source_a", portId:"out+"}, to:{nodeId:"busbar", portId:"p1"}, wire:{maxA:50}},
-      {id:"e2", from:{nodeId:"source_b", portId:"out+"}, to:{nodeId:"busbar", portId:"p1"}, wire:{maxA:50}},
-      {id:"e3", from:{nodeId:"busbar", portId:"p1"}, to:{nodeId:"load", portId:"in+"}, wire:{maxA:40}},
-    ]
-  },
-  scenario: {
-    dispatchPolicy: "share_proportionally",
-  }
-};
-
-// Test 8: Disabled nodes scenario
-const test8: FlowInput = {
-  graph: {
-    nodes: [
-      {
-        id: "battery",
-        type: "storage",
-        ports: [{id:"p+", domain:"DC_12V", conductor:"POS", dir:"bidirectional"}],
-        params: {maxDischargeA: 100}
-      },
-      {
-        id: "busbar",
-        type: "distribution",
-        ports: [{id:"p1", domain:"DC_12V", conductor:"POS", dir:"bidirectional"}],
-        params: {}
-      },
-      {
-        id: "fridge",
-        type: "load",
-        ports: [{id:"in+", domain:"DC_12V", conductor:"POS", dir:"in"}],
-        params: {watts: 60}
-      },
-      {
-        id: "lights",
-        type: "load",
-        ports: [{id:"in+", domain:"DC_12V", conductor:"POS", dir:"in"}],
-        params: {watts: 30}
-      },
-    ],
-    edges: [
-      {id:"e1", from:{nodeId:"battery", portId:"p+"}, to:{nodeId:"busbar", portId:"p1"}, wire:{maxA:100}},
-      {id:"e2", from:{nodeId:"busbar", portId:"p1"}, to:{nodeId:"fridge", portId:"in+"}, wire:{maxA:20}},
-      {id:"e3", from:{nodeId:"busbar", portId:"p1"}, to:{nodeId:"lights", portId:"in+"}, wire:{maxA:10}},
-    ]
-  },
-  scenario: {
-    enabledNodes: {fridge: false, lights: true}, // fridge disabled
-  }
-};
-
-// Test 9: Wire capacity exceeded
-const test9: FlowInput = {
-  graph: {
-    nodes: [
-      {
-        id: "battery",
-        type: "storage",
-        ports: [{id:"p+", domain:"DC_12V", conductor:"POS", dir:"bidirectional"}],
-        params: {maxDischargeA: 200}
-      },
-      {
-        id: "heavy_load",
-        type: "load",
-        ports: [{id:"in+", domain:"DC_12V", conductor:"POS", dir:"in"}],
-        params: {watts: 200}
-      },
-    ],
-    edges: [
-      {id:"e1", from:{nodeId:"battery", portId:"p+"}, to:{nodeId:"heavy_load", portId:"in+"}, wire:{maxA:10}, protection:{fuseA:15}},
-    ]
-  },
-  scenario: {}
-};
-
-// Run all tests
-const tests = [
-  {name: "Test 1: Simple battery -> load", input: test1},
-  {name: "Test 2: Multiple loads", input: test2},
-  {name: "Test 3: Solar charging battery", input: test3},
-  {name: "Test 4: DC-DC converter", input: test4},
-  {name: "Test 5: Multiple sources with priority", input: test5},
-  {name: "Test 6: Overload scenario", input: test6},
-  {name: "Test 7: Proportional dispatch", input: test7},
-  {name: "Test 8: Disabled nodes", input: test8},
-  {name: "Test 9: Wire capacity exceeded", input: test9},
-];
-
-console.log("=".repeat(80));
-console.log("FLOW ENGINE TEST SUITE");
-console.log("=".repeat(80));
-
-for (const test of tests) {
-  console.log(`\n${"─".repeat(80)}`);
-  console.log(`${test.name}`);
-  console.log("─".repeat(80));
-  
-  const result = computeFlow(test.input);
-  
-  console.log(`Status: ${result.status}`);
-  
-  if (result.diagnostics.length > 0) {
-    console.log(`\nDiagnostics (${result.diagnostics.length}):`);
-    result.diagnostics.forEach(d => {
-      console.log(`  [${d.severity.toUpperCase()}] ${d.code}: ${d.message}`);
-    });
-  }
-  
-  console.log(`\nEdge Flows:`);
-  Object.entries(result.edges).forEach(([id, flow]) => {
-    const util = flow.utilization ? ` (${(flow.utilization * 100).toFixed(1)}%)` : '';
-    const limited = flow.limitedBy ? ` ⚠️ ${flow.limitedBy.join(', ')}` : '';
-    console.log(`  ${id}: ${flow.currentA.toFixed(2)}A${util}${limited}`);
-  });
-  
-  console.log(`\nNode Flows:`);
-  Object.entries(result.nodes).forEach(([id, flow]) => {
-    const parts: string[] = [];
-    if (flow.state) parts.push(`state=${flow.state}`);
-    if (flow.netA !== undefined) parts.push(`${flow.netA.toFixed(2)}A`);
-    if (flow.demandW !== undefined) parts.push(`demand=${flow.demandW.toFixed(0)}W`);
-    if (flow.supplyW !== undefined) parts.push(`supply=${flow.supplyW.toFixed(0)}W`);
-    if (flow.clampedBy) parts.push(`⚠️ clamped by ${flow.clampedBy.join(', ')}`);
-    console.log(`  ${id}: ${parts.join(', ')}`);
-  });
-  
-  console.log(`\nTotals by Domain:`);
-  Object.entries(result.totals.byDomain).forEach(([domain, totals]) => {
-    console.log(`  ${domain}: Load=${totals.loadW.toFixed(0)}W, Supply=${totals.supplyW.toFixed(0)}W, Loss=${totals.lossW.toFixed(1)}W`);
-  });
 }

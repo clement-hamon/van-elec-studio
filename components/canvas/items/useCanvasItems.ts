@@ -67,11 +67,17 @@ export const useCanvasItems = ({
     cables.syncCableLines(nodes.getNodeCenter)
     applySelection()
     applyIssueBadges()
+    applyFlowIndicators()
     layer.batchDraw()
   }
 
   const syncCableLines = () => {
     cables.syncCableLines(nodes.getNodeCenter)
+  }
+
+  const applyFlowIndicators = () => {
+    nodes.applyFlowIndicators()
+    cables.applyFlowIndicators()
   }
 
   nodes.ensureAssets()
@@ -81,5 +87,6 @@ export const useCanvasItems = ({
     syncCableLines,
     applySelection,
     applyIssueBadges,
+    applyFlowIndicators,
   }
 }

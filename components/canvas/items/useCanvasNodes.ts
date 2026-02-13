@@ -27,6 +27,8 @@ const nodeImageOffset = {
 const nodeTitleY = nodeImageOffset.y + nodeImageSize.height + 2
 const nodeTitleFontSize = Math.round(13 * NODE_SCALE)
 const nodeHaloRadius = nodeImageSize.width / 2 + Math.round(10 * NODE_SCALE)
+const nodeFlowY = nodeTitleY + Math.round(16 * NODE_SCALE)
+const nodeFlowFontSize = Math.round(11 * NODE_SCALE)
 
 const nodeImageCache = new Map<string, HTMLImageElement>()
 
@@ -134,6 +136,20 @@ export const useCanvasNodes = ({
       name: 'node-title',
     })
 
+    const flowText = new Konva.Text({
+      x: 0,
+      y: nodeFlowY,
+      width: NODE_WIDTH,
+      align: 'center',
+      text: '',
+      fontSize: nodeFlowFontSize,
+      fontFamily: 'Space Grotesk, sans-serif',
+      fill: '#6a4b3b',
+      visible: false,
+      name: 'node-flow',
+      listening: false,
+    })
+
     const iconUrl = iconUrlForComponent(component, baseURL)
 
     const imageElement = ensureNodeImage(layer, iconUrl)
@@ -152,6 +168,7 @@ export const useCanvasNodes = ({
     componentGroup.add(selection_halo)
     componentGroup.add(image)
     componentGroup.add(title)
+    componentGroup.add(flowText)
     componentGroup.setAttr('iconUrl', iconUrl)
 
     const connectionExists = (sourceId: string, targetId: string) =>
@@ -245,6 +262,7 @@ export const useCanvasNodes = ({
       node.position({ x: component.position.x, y: component.position.y })
       const title = node.findOne<Konva.Text>('.node-title')
       if (title) title.text(component.name || component.id)
+      node.opacity(schemaStore.isComponentEnabled(component.id) ? 1 : 0.45)
       const nextIconUrl = iconUrlForComponent(component, baseURL)
       const currentIconUrl = node.getAttr('iconUrl')
       if (currentIconUrl !== nextIconUrl) {
@@ -293,6 +311,42 @@ export const useCanvasNodes = ({
     })
   }
 
+  const applyFlowIndicators = () => {
+    const flow = schemaStore.flow
+    nodeMap.forEach((node, nodeId) => {
+      const flowText = node.findOne<Konva.Text>('.node-flow')
+      if (!flowText) return
+      const enabled = schemaStore.isComponentEnabled(nodeId)
+      node.opacity(enabled ? 1 : 0.45)
+      if (!enabled) {
+        flowText.text('OFF')
+        flowText.fill('#9b8f84')
+        flowText.visible(true)
+        return
+      }
+
+      const nodeFlow = flow?.nodes?.[nodeId]
+      let text = ''
+      let color = '#6a4b3b'
+
+      if (nodeFlow?.state) {
+        const current = nodeFlow.netA !== undefined ? `${Math.abs(nodeFlow.netA).toFixed(1)}A` : ''
+        text = `${nodeFlow.state}${current ? ` ${current}` : ''}`
+        color = nodeFlow.state === 'charging' ? '#4c7d6b' : '#d96b3a'
+      } else if (nodeFlow?.supplyW && nodeFlow.supplyW > 0) {
+        text = `supply ${nodeFlow.supplyW.toFixed(0)}W`
+        color = '#3a84d9'
+      } else if (nodeFlow?.demandW && nodeFlow.demandW > 0) {
+        text = `load ${nodeFlow.demandW.toFixed(0)}W`
+        color = '#6a4b3b'
+      }
+
+      flowText.text(text)
+      flowText.fill(color)
+      flowText.visible(text.length > 0)
+    })
+  }
+
   return {
     nodeMap,
     getNodeCenter,
@@ -300,6 +354,7 @@ export const useCanvasNodes = ({
     pruneNodes,
     applySelection,
     applyIssueBadges,
+    applyFlowIndicators,
     ensureAssets: () => {
       ensureNodeImage(layer, getAssetPath('/icons/mppt.svg', baseURL))
       ensureNodeImage(layer, getAssetPath('/icons/dc-dc.svg', baseURL))
