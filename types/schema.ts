@@ -1,23 +1,9 @@
 export type Id = string
 
-export type VoltageDomain = '12V' | '24V' | '48V'
-export type ComponentCategory = 'source' | 'storage' | 'conversion' | 'distribution' | 'load'
-export type EnergyRole =
-  | 'source'
-  | 'storage'
-  | 'conversion'
-  | 'distribution'
-  | 'load'
-  | 'protection'
-  | 'charger'
-export type ChargePathRole =
-  | 'source'
-  | 'controller'
-  | 'charger'
-  | 'battery'
-  | 'converter'
-  | 'inlet'
-  | 'none'
+export type NodeType = 'source' | 'storage' | 'conversion' | 'distribution' | 'load'
+export type PortDomain = 'dc' | 'ac'
+export type PortDirection = 'in' | 'out' | 'bidirectional'
+export type PortConductor = 'POS' | 'NEG' | 'CHASSIS' | 'L' | 'N' | 'PE'
 
 export type ComponentFieldType = 'text' | 'number' | 'select'
 
@@ -40,27 +26,18 @@ export type ComponentType = {
   id: string
   label: string
   description?: string
-  category: ComponentCategory
-  energyRole?: EnergyRole
-  chargePathRole?: ChargePathRole
-  passThrough?: boolean
+  nodeType: NodeType
   defaultProps: Record<string, number | string | boolean>
   fields?: ComponentFieldDefinition[]
   ports: PortDefinition[]
-  constraints?: ComponentConstraints
 }
 
 export type PortDefinition = {
   id: string
   label: string
-  direction: 'in' | 'out' | 'bidirectional'
-  domain: 'dc' | 'ac'
-  maxCurrent?: number
-}
-
-export type ComponentConstraints = {
-  voltageDomain?: VoltageDomain
-  maxCurrent?: number
+  direction: PortDirection
+  domain: PortDomain
+  conductor: PortConductor
 }
 
 export type ComponentInstance = {
@@ -69,57 +46,6 @@ export type ComponentInstance = {
   name: string
   position: Position
   props: Record<string, number | string | boolean>
-  derived: Record<string, number | string | boolean>
-  groupId?: Id
-}
-
-export type BatteryProps = {
-  capacityAh: number
-  outputVoltage?: number
-  maxInputVoltage?: number
-  chemistry?: string
-  recommendedChargeVoltage?: number
-  chargeCutoffVoltage?: number
-  chargeCutoffDurationMs?: number
-  recommendedChargeCurrentA?: number
-  maxChargeCurrentA?: number
-  absorptionVoltage?: number
-  floatVoltage?: number
-}
-
-export type SolarPanelProps = {
-  watt: number
-  voltage: number
-  currentA?: number
-}
-
-export type ChargeControllerProps = {
-  controllerType?: 'mppt' | 'pwm'
-  maxInputVoltage?: number
-  maxInputCurrentA?: number
-  maxOutputCurrentA?: number
-  outputVoltage?: number
-}
-
-export type AlternatorProps = {
-  ratedCurrentA: number
-  voltage?: number
-}
-
-export type DcDcChargerProps = {
-  maxOutputCurrentA: number
-  inputVoltage?: number
-  outputVoltage?: number
-}
-
-export type ShoreInletProps = {
-  inputVoltage: 120 | 230
-}
-
-export type AcDcChargerProps = {
-  maxOutputCurrentA: number
-  outputVoltage?: number
-  inputVoltage?: number
 }
 
 export type Cable = {
@@ -148,13 +74,6 @@ export type CableDerived = {
   voltageDropV: number
 }
 
-export type Group = {
-  id: Id
-  name: string
-  constraint: ComponentConstraints
-  children: Id[]
-}
-
 export type Position = {
   x: number
   y: number
@@ -163,7 +82,6 @@ export type Position = {
 export type SchemaState = {
   components: ComponentInstance[]
   cables: Cable[]
-  groups: Group[]
   selection: SelectionState
   scenario?: ScenarioState
   updatedAt: string
@@ -179,14 +97,13 @@ export type ScenarioState = {
 export type SelectionState = {
   componentId?: Id
   cableId?: Id
-  groupId?: Id
 }
 
 export type Issue = {
   id: Id
   level: 'warning' | 'error' | 'info'
   message: string
-  targetType: 'component' | 'cable' | 'group'
+  targetType: 'component' | 'cable'
   targetId: Id
   suggestion?: string
   category?: string

@@ -197,14 +197,7 @@ const componentType = computed(() => {
 
 const componentPorts = computed(() => componentType.value?.ports ?? [])
 
-const showScenarioToggle = computed(() => {
-  const type = componentType.value
-  if (!type) return false
-  if (type.category === 'load' || type.energyRole === 'load') return true
-  if (type.energyRole === 'charger') return true
-  if (type.chargePathRole === 'charger' || type.chargePathRole === 'controller') return true
-  return false
-})
+const showScenarioToggle = computed(() => !!selectedComponent.value)
 
 const componentEnabled = computed({
   get: () => (selectedComponent.value ? schemaStore.isComponentEnabled(selectedComponent.value.id) : true),

@@ -8,7 +8,6 @@ import type {
   Cable,
   ComponentInstance,
   ComponentType,
-  Group,
   Issue,
   SchemaState,
 } from '~/types/schema'
@@ -71,7 +70,6 @@ const defaultSchema = (): SchemaState => ({
         recommendedChargeCurrentA: 45,
         maxChargeCurrentA: 75,
       },
-      derived: { maxCurrentA: 200, voltageDomain: '12V' },
     },
     {
       id: 'comp-2',
@@ -79,7 +77,6 @@ const defaultSchema = (): SchemaState => ({
       name: 'Main Fuse',
       position: { x: 360, y: 140 },
       props: { ratingA: 60, operatingVoltage: 32 },
-      derived: { maxCurrentA: 120, voltageDomain: '12V' },
     },
   ],
   cables: [
@@ -102,7 +99,6 @@ const defaultSchema = (): SchemaState => ({
       },
     },
   ],
-  groups: [],
   selection: {},
   scenario: {
     enabledNodes: {},
@@ -115,7 +111,6 @@ const defaultSchema = (): SchemaState => ({
 const emptySchema = (): SchemaState => ({
   components: [],
   cables: [],
-  groups: [],
   selection: {},
   scenario: {
     enabledNodes: {},
@@ -212,21 +207,12 @@ export const useSchemaStore = defineStore('schema', {
         (component) => component.typeId === typeId,
       ).length
 
-      const derived: Record<string, number | string | boolean> = {
-        maxCurrentA: type.constraints?.maxCurrent ?? 0,
-      }
-
-      if (type.constraints?.voltageDomain) {
-        derived.voltageDomain = type.constraints.voltageDomain
-      }
-
       this.addComponent({
         id: makeId('comp'),
         typeId,
         name: `${type.label} ${sameTypeCount + 1}`,
         position: position ?? { x: 160 + sameTypeCount * 40, y: 220 + sameTypeCount * 30 },
         props: { ...type.defaultProps },
-        derived,
       })
     },
     refreshValidation() {
@@ -285,7 +271,7 @@ export const useSchemaStore = defineStore('schema', {
         targetPortId: cable.sourcePortId,
       })
     },
-    setSelection(payload: { componentId?: string; cableId?: string; groupId?: string }) {
+    setSelection(payload: { componentId?: string; cableId?: string }) {
       this.schema.selection = payload
     },
     addComponent(instance: ComponentInstance) {
@@ -319,10 +305,6 @@ export const useSchemaStore = defineStore('schema', {
       this.schema.cables = this.schema.cables.filter(
         (cable) => cable.sourceId !== id && cable.targetId !== id,
       )
-      this.schema.groups = this.schema.groups.map((group) => ({
-        ...group,
-        children: group.children.filter((childId) => childId !== id),
-      }))
       if (wasSelected) this.schema.selection = {}
       this.schema.updatedAt = nowIso()
       this.refreshValidation()
@@ -331,11 +313,6 @@ export const useSchemaStore = defineStore('schema', {
       const wasSelected = this.schema.selection.cableId === id
       this.schema.cables = this.schema.cables.filter((cable) => cable.id !== id)
       if (wasSelected) this.schema.selection = {}
-      this.schema.updatedAt = nowIso()
-      this.refreshValidation()
-    },
-    addGroup(group: Group) {
-      this.schema.groups.push(group)
       this.schema.updatedAt = nowIso()
       this.refreshValidation()
     },

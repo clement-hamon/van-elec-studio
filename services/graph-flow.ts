@@ -16,13 +16,6 @@ type PortDefinition = ComponentType['ports'][number]
 const DEFAULT_DC_V = 12
 const DEFAULT_AC_V = 230
 
-const voltageFromDomain = (domain?: string) => {
-  if (domain === '12V') return 12
-  if (domain === '24V') return 24
-  if (domain === '48V') return 48
-  return null
-}
-
 const numericProp = (props: Record<string, unknown>, key: string) => {
   const value = props[key]
   return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : null
@@ -49,31 +42,6 @@ const formatDomain = (kind: 'dc' | 'ac', voltage: number) => {
   return `${kind === 'dc' ? 'DC' : 'AC'}_${normalized}V`
 }
 
-const inferConductor = (port: PortDefinition): FlowPort['conductor'] => {
-  const id = port.id.toLowerCase()
-  const label = (port.label ?? '').toLowerCase().trim()
-
-  if (port.domain === 'ac') {
-    if (label === 'n' || label.includes('neutral') || id.includes('neutral')) return 'N'
-    if (label === 'pe' || label.includes('earth') || label.includes('ground')) return 'PE'
-    return 'L'
-  }
-
-  if (label === '-' || label === '−' || id.includes('neg') || id.includes('negative')) return 'NEG'
-  if (id.includes('chassis') || id.includes('gnd') || id.includes('ground')) return 'CHASSIS'
-  return 'POS'
-}
-
-const mapNodeType = (type: ComponentType | undefined): BaseNode['type'] => {
-  if (!type) return 'distribution'
-  if (type.category) return type.category
-  if (type.energyRole === 'charger' || type.energyRole === 'conversion') return 'conversion'
-  if (type.energyRole === 'storage') return 'storage'
-  if (type.energyRole === 'source') return 'source'
-  if (type.energyRole === 'load') return 'load'
-  return 'distribution'
-}
-
 const resolveOutputVoltage = (
   component: ComponentInstance,
   voltageResolver: { getOutputVoltage: (nodeId: string) => number },
@@ -85,17 +53,8 @@ const resolveOutputVoltage = (
 
 const resolveInputVoltage = (
   component: ComponentInstance,
-  portId: string,
-  incomingByPort: Map<string, string[]>,
-  voltageResolver: { getOutputVoltage: (nodeId: string) => number },
   fallback: number,
 ) => {
-  const incomingSources = incomingByPort.get(`${component.id}:${portId}`) ?? []
-  for (const sourceId of incomingSources) {
-    const candidate = voltageResolver.getOutputVoltage(sourceId)
-    if (candidate > 0) return candidate
-  }
-
   const props = component.props as Record<string, unknown>
   const fromProps =
     pickProp(props, ['inputVoltage', 'maxInputVoltage', 'operatingVoltage', 'voltage']) ?? null
@@ -104,12 +63,11 @@ const resolveInputVoltage = (
 
 const buildNodeParams = (
   component: ComponentInstance,
-  type: ComponentType | undefined,
+  nodeType: BaseNode['type'],
   outputVoltage: number,
 ) => {
   const props = component.props as Record<string, unknown>
   const params: Record<string, unknown> = {}
-  const nodeType = mapNodeType(type)
 
   if (nodeType === 'load') {
     const watts = pickProp(props, ['watt', 'powerW', 'continuousW'])
@@ -129,10 +87,7 @@ const buildNodeParams = (
 
   if (nodeType === 'storage') {
     const maxChargeA = pickProp(props, ['maxChargeCurrentA', 'recommendedChargeCurrentA'])
-    const maxDischargeA =
-      pickProp(props, ['maxDischargeCurrentA', 'maxOutputCurrentA', 'maxCurrentA']) ??
-      (typeof component.derived?.maxCurrentA === 'number' ? component.derived.maxCurrentA : null) ??
-      (typeof type?.constraints?.maxCurrent === 'number' ? type?.constraints?.maxCurrent : null)
+    const maxDischargeA = pickProp(props, ['maxDischargeCurrentA', 'maxOutputCurrentA', 'maxCurrentA'])
 
     if (maxChargeA !== null) params.maxChargeA = maxChargeA
     if (maxDischargeA !== null) params.maxDischargeA = maxDischargeA
@@ -151,8 +106,7 @@ const buildNodeParams = (
   return params
 }
 
-const isBatteryType = (type: ComponentType | undefined) =>
-  type?.chargePathRole === 'battery' || type?.id === 'battery'
+const isBatteryType = (type: ComponentType | undefined) => type?.id === 'battery'
 
 const resolveBatteryChargeVoltage = (
   component: ComponentInstance,
@@ -171,10 +125,7 @@ const resolveBatteryChargeVoltage = (
   return chargeVoltage ?? outputVoltage
 }
 
-const resolveBatteryChargeCurrentA = (
-  component: ComponentInstance,
-  type: ComponentType | undefined,
-) => {
+const resolveBatteryChargeCurrentA = (component: ComponentInstance) => {
   const props = component.props as Record<string, unknown>
   const explicit = pickProp(props, ['maxChargeCurrentA', 'recommendedChargeCurrentA'])
   if (explicit !== null) return explicit
@@ -182,20 +133,12 @@ const resolveBatteryChargeCurrentA = (
   const fallback = pickProp(props, ['maxCurrentA', 'maxOutputCurrentA', 'maxDischargeCurrentA'])
   if (fallback !== null) return fallback
 
-  const derivedMax =
-    typeof component.derived?.maxCurrentA === 'number' ? component.derived.maxCurrentA : null
-  if (derivedMax && derivedMax > 0) return derivedMax
-
-  const typeMax =
-    typeof type?.constraints?.maxCurrent === 'number' ? type.constraints.maxCurrent : null
-  if (typeMax && typeMax > 0) return typeMax
-
   return null
 }
 
 const pickBatteryPosPortId = (ports: PortDefinition[]) => {
   if (ports.length === 0) return undefined
-  const posPort = ports.find((port) => inferConductor(port) === 'POS')
+  const posPort = ports.find((port) => port.conductor === 'POS')
   return posPort?.id ?? ports[0]?.id
 }
 
@@ -289,16 +232,10 @@ export const computeFlowForSchema = (
   const componentById = new Map(schema.components.map((component) => [component.id, component]))
   const incomingByComponent = new Map<string, string[]>()
 
-  const incomingByPort = new Map<string, string[]>()
   schema.cables.forEach((cable) => {
     const incoming = incomingByComponent.get(cable.targetId) ?? []
     incoming.push(cable.sourceId)
     incomingByComponent.set(cable.targetId, incoming)
-    if (!cable.targetPortId) return
-    const key = `${cable.targetId}:${cable.targetPortId}`
-    const list = incomingByPort.get(key) ?? []
-    list.push(cable.sourceId)
-    incomingByPort.set(key, list)
   })
 
   const voltageResolver = (() => {
@@ -318,14 +255,6 @@ export const computeFlowForSchema = (
       )
     }
 
-    const getFallbackVoltage = (component: ComponentInstance | undefined) => {
-      if (!component) return DEFAULT_DC_V
-      const type = typeById.get(component.typeId)
-      const domain =
-        (component.derived?.voltageDomain as string | undefined) || type?.constraints?.voltageDomain
-      return voltageFromDomain(domain) ?? DEFAULT_DC_V
-    }
-
     const getOutputVoltage = (nodeId: string): number => {
       if (outputMemo.has(nodeId)) return outputMemo.get(nodeId) ?? DEFAULT_DC_V
       if (visiting.has(nodeId)) return DEFAULT_DC_V
@@ -333,7 +262,7 @@ export const computeFlowForSchema = (
 
       const component = componentById.get(nodeId)
       const type = component ? typeById.get(component.typeId) : undefined
-      const role = type?.category
+      const role = type?.nodeType
 
       let voltage: number | null = null
       if (role === 'distribution') {
@@ -348,7 +277,7 @@ export const computeFlowForSchema = (
       }
 
       if (!voltage) {
-        voltage = getFallbackVoltage(component)
+        voltage = DEFAULT_DC_V
       }
 
       outputMemo.set(nodeId, voltage)
@@ -380,12 +309,8 @@ export const computeFlowForSchema = (
 
   schema.components.forEach((component) => {
     const type = typeById.get(component.typeId)
-    const nodeType = mapNodeType(type)
-    const baseVoltage = voltageFromDomain(
-      (component.derived?.voltageDomain as string | undefined) ??
-        type?.constraints?.voltageDomain,
-    )
-    const fallbackVoltage = baseVoltage ?? DEFAULT_DC_V
+    const nodeType = type?.nodeType ?? 'distribution'
+    const fallbackVoltage = DEFAULT_DC_V
     const outputVoltage = resolveOutputVoltage(component, voltageResolver, fallbackVoltage)
     const isBattery = isBatteryType(type)
     const chargeVoltage = isBattery ? resolveBatteryChargeVoltage(component, outputVoltage) : outputVoltage
@@ -397,7 +322,7 @@ export const computeFlowForSchema = (
       const portVoltage = isSplitBattery
         ? outputVoltage
         : isIn
-          ? resolveInputVoltage(component, port.id, incomingByPort, voltageResolver, outputVoltage)
+          ? resolveInputVoltage(component, outputVoltage)
           : outputVoltage
 
       const normalizedVoltage =
@@ -405,7 +330,7 @@ export const computeFlowForSchema = (
           ? normalizeVoltage(portVoltage || DEFAULT_AC_V, 'ac')
           : normalizeVoltage(portVoltage || fallbackVoltage, 'dc')
       const domain = formatDomain(port.domain, normalizedVoltage)
-      const conductor = inferConductor(port)
+      const conductor = port.conductor
 
       domainVoltage.set(domain, normalizedVoltage)
       portMeta.set(`${component.id}:${port.id}`, { domain, voltage: normalizedVoltage })
@@ -422,7 +347,7 @@ export const computeFlowForSchema = (
       id: component.id,
       type: nodeType,
       ports,
-      params: buildNodeParams(component, type, outputVoltage),
+      params: buildNodeParams(component, nodeType, outputVoltage),
     })
 
     if (isSplitBattery) {
@@ -434,7 +359,7 @@ export const computeFlowForSchema = (
       const batteryPosPortId = pickBatteryPosPortId(type?.ports ?? []) ?? ports[0]?.id
       if (!batteryPosPortId) return
 
-      const maxChargeA = resolveBatteryChargeCurrentA(component, type)
+      const maxChargeA = resolveBatteryChargeCurrentA(component)
       const hasIncomingCable = schema.cables.some((cable) => cable.targetId === component.id)
       const chargeDemandA =
         maxChargeA && maxChargeA > 0 && hasIncomingCable ? maxChargeA : undefined
@@ -565,7 +490,6 @@ export const computeFlowForSchema = (
 
   const graphEngine = new GraphEngine(graph)
   const flow = computeFlow({ graph: graphEngine.getSnapshot(), scenario })
-
   return { graph, flow, edgeMeta }
 }
 
