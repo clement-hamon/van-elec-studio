@@ -7,7 +7,7 @@ import {
   type GraphInput,
   type Port as FlowPort,
   type ScenarioInput,
-} from '~/services/flow-engine'
+} from '~/services/flow-engine-simple'
 import type { Cable, ComponentInstance, ComponentType, SchemaState } from '~/types/schema'
 import { estimateAmpacityForAwg } from '~/services/cable'
 
@@ -101,6 +101,11 @@ const buildNodeParams = (
     if (maxOutA !== null) params.maxOutA = maxOutA
     if (maxOutW !== null) params.maxOutW = maxOutW
     if (efficiency !== null) params.efficiency = efficiency
+  }
+
+  if (nodeType === 'distribution') {
+    const ratingA = pickProp(props, ['ratingA'])
+    if (ratingA !== null) params.ratingA = ratingA
   }
 
   return params

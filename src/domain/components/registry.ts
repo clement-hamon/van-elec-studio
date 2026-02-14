@@ -53,7 +53,7 @@ export const componentRegistry: ComponentType[] = [
     description:
       'Overcurrent protection for a single circuit. Place close to the power source and size to protect the downstream cable and equipment.',
     nodeType: 'distribution',
-    defaultProps: { ratingA: 60, operatingVoltage: 32 },
+    defaultProps: { ratingA: 60, operatingVoltage: 12 },
     fields: [fieldRatingA, fieldOperatingVoltage],
     ports: [
       { id: 'in', label: 'In', direction: 'in', domain: 'dc', conductor: 'POS' },
