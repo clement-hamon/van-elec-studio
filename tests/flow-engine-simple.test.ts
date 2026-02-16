@@ -1,13 +1,13 @@
-import { computeFlow, type FlowInput } from "../services/flow-engine-simple";
+import { computeFlow, type FlowInput } from "../services/flow-engine";
 
-describe("flow-engine-simple", () => {
+describe("flow-engine", () => {
   it("computes currents for a small 12V tree", () => {
     const input: FlowInput = {
       graph: {
         nodes: [
           {
             id: "bat",
-            type: "storage",
+            type: "battery",
             ports: [{ id: "p+", domain: "DC_12V", conductor: "POS", dir: "bidirectional" }],
             params: { maxDischargeA: 20, nominalV: 12 }
           },
@@ -55,7 +55,7 @@ describe("flow-engine-simple", () => {
         nodes: [
           {
             id: "bat",
-            type: "storage",
+            type: "battery",
             ports: [{ id: "p+", domain: "DC_12V", conductor: "POS", dir: "bidirectional" }],
             params: { maxDischargeA: 5 }
           },
@@ -87,7 +87,7 @@ describe("flow-engine-simple", () => {
         nodes: [
           {
             id: "bat",
-            type: "storage",
+            type: "battery",
             ports: [{ id: "p+", domain: "DC_12V", conductor: "POS", dir: "bidirectional" }],
             params: { maxDischargeA: 10 }
           },

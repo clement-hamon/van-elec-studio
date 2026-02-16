@@ -1,18 +1,16 @@
 import { defineStore } from 'pinia'
 import { computeCableDerived, estimateAmpacityForAwg } from '~/services/cable'
-import { computeFlow } from '~/services/flow-engine-simple'
+import { computeFlow } from '~/services/flow-engine'
 import { componentRegistry } from '~/src/domain/components/registry'
 import { getHistoryDepth, loadSchema, saveSchema, undoSchema } from '~/services/storage'
-import type { FlowOutput, ScenarioInput, Port } from '~/types/flow'
-import type {
+import type { FlowOutput, ScenarioInput, Port,
   Cable,
   CableDerived,
   CableWire,
   ComponentInstance,
   ComponentType,
   Issue,
-  SchemaState,
-} from '~/types/schema'
+  SchemaState } from '~/types/schema'
 
 const nowIso = () => new Date().toISOString()
 const SAVE_DEBOUNCE_MS = 500
@@ -148,7 +146,7 @@ const defaultSchema = (registry: ComponentType[]): SchemaState => {
   const battery: ComponentInstance = {
     id: 'comp-1',
     typeId: 'battery',
-    type: batteryType?.type ?? 'storage',
+    type: batteryType?.type ?? 'battery',
     name: 'Main Battery',
     position: { x: 140, y: 140 },
     params: { ...(batteryType?.defaultParams ?? {}) },

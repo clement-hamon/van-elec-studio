@@ -23,7 +23,7 @@ export const componentRegistry: ComponentType[] = [
     label: 'Battery',
     description:
       'Stores DC energy and supplies power to loads. Integrate on the main DC bus with a main fuse and proper cable sizing; connect chargers through regulated charge paths.',
-    type: 'storage',
+    type: 'battery',
     defaultParams: {
       nominalV: 12,
       capacityAh: 200,
