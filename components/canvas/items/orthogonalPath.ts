@@ -1,3 +1,5 @@
+import { NODE_HEIGHT, NODE_WIDTH } from './constants'
+
 export type Point = { x: number; y: number }
 
 type PrimaryAxis = 'auto' | 'horizontal' | 'vertical'
@@ -7,48 +9,107 @@ const EPSILON = 0.5
 const isAligned = (start: Point, end: Point) =>
   Math.abs(start.x - end.x) < EPSILON || Math.abs(start.y - end.y) < EPSILON
 
-const resolveAxis = (start: Point, end: Point, axis: PrimaryAxis): 'horizontal' | 'vertical' => {
-  if (axis !== 'auto') return axis
-  return Math.abs(end.x - start.x) >= Math.abs(end.y - start.y) ? 'horizontal' : 'vertical'
+type EdgeAnchor = { point: Point; axis: 'horizontal' | 'vertical' }
+
+const resolveEdgeAnchor = (from: Point, to: Point): EdgeAnchor => {
+  const dx = to.x - from.x
+  const dy = to.y - from.y
+  const absDx = Math.abs(dx)
+  const absDy = Math.abs(dy)
+
+  if (absDx >= absDy) {
+    const direction = Math.sign(dx) || 1
+    return {
+      point: {
+        x: from.x + direction * (NODE_WIDTH / 2),
+        y: from.y,
+      },
+      axis: 'horizontal',
+    }
+  }
+
+  const direction = Math.sign(dy) || 1
+  return {
+    point: {
+      x: from.x,
+      y: from.y + direction * (NODE_HEIGHT / 2),
+    },
+    axis: 'vertical',
+  }
 }
 
-export function getConnectorPoints(from, to) {
-  const dx = to.x - from.x;
-  const dy = to.y - from.y;
-  const angle = Math.atan2(-dy, dx);
-  const radius = 50;
+const getConnectorAnchors = (from: Point, to: Point) => {
+  const start = resolveEdgeAnchor(from, to)
+  const end = resolveEdgeAnchor(to, from)
+  return { start, end }
+}
 
-  return [
-    from.x + -radius * Math.cos(angle + Math.PI),
-    from.y + radius * Math.sin(angle + Math.PI),
-    to.x + -radius * Math.cos(angle),
-    to.y + radius * Math.sin(angle),
-  ];
+export function getConnectorPoints(from: Point, to: Point) {
+  const { start, end } = getConnectorAnchors(from, to)
+  return [start.point.x, start.point.y, end.point.x, end.point.y]
 }
 
 export const buildOrthogonalPoints = (
   origin: Point,
   target: Point,
-  axis: PrimaryAxis = 'auto',
+  _axis: PrimaryAxis = 'auto',
 ) => {
 
-  const connectorPoints = getConnectorPoints(origin, target)
-  const start = { x: connectorPoints[0], y: connectorPoints[1] }
-  const end = { x: connectorPoints[2], y: connectorPoints[3] }
+  const { start, end } = getConnectorAnchors(origin, target)
+  const startPoint = start.point
+  const endPoint = end.point
 
-  if (isAligned(start, end)) {
-    return [start.x, start.y, end.x, end.y]
+  const sameAxis = start.axis === end.axis
+  const isHorizontalLine = Math.abs(startPoint.y - endPoint.y) < EPSILON
+  const isVerticalLine = Math.abs(startPoint.x - endPoint.x) < EPSILON
+  const directAllowed =
+    sameAxis &&
+    isAligned(startPoint, endPoint) &&
+    ((start.axis === 'horizontal' && isHorizontalLine) ||
+      (start.axis === 'vertical' && isVerticalLine))
+
+  if (directAllowed) return [startPoint.x, startPoint.y, endPoint.x, endPoint.y]
+
+  if (sameAxis) {
+    if (start.axis === 'horizontal') {
+      const midX = (startPoint.x + endPoint.x) / 2
+      return [startPoint.x, startPoint.y, midX, startPoint.y, midX, endPoint.y, endPoint.x, endPoint.y]
+    }
+
+    const midY = (startPoint.y + endPoint.y) / 2
+    return [startPoint.x, startPoint.y, startPoint.x, midY, endPoint.x, midY, endPoint.x, endPoint.y]
   }
 
-  const resolvedAxis = resolveAxis(start, end, axis)
+  const midX = (startPoint.x + endPoint.x) / 2
+  const midY = (startPoint.y + endPoint.y) / 2
 
-  if (resolvedAxis === 'horizontal') {
-    const midX = (start.x + end.x) / 2
-    return [start.x, start.y, midX, start.y, midX, end.y, end.x, end.y]
+  if (start.axis === 'horizontal') {
+    return [
+      startPoint.x,
+      startPoint.y,
+      midX,
+      startPoint.y,
+      midX,
+      midY,
+      endPoint.x,
+      midY,
+      endPoint.x,
+      endPoint.y,
+    ]
   }
 
-  const midY = (start.y + end.y) / 2
-  return [start.x, start.y, start.x, midY, end.x, midY, end.x, end.y]
+  return [
+    startPoint.x,
+    startPoint.y,
+    startPoint.x,
+    midY,
+    midX,
+    midY,
+    midX,
+    endPoint.y,
+    endPoint.x,
+    endPoint.y,
+  ]
 }
 
 export const getPolylineMidpoint = (points: number[]) => {
