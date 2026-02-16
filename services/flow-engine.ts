@@ -24,8 +24,10 @@ import type {
   GraphInput,
   NodeFlow,
   Port,
-  ScenarioInput, NodeType 
+  ScenarioInput,
+  NodeType
 } from "~/types/schema";
+import { nodeTypes } from "~/types/schema";
 
 import { buildAdjacency, buildSpanningTree } from "./spanning-tree";
 import { runVisitors } from "./visitors/tree-visitor";
@@ -140,7 +142,7 @@ class FlowEngine {
     const edgeCurrent = new EdgeCurrentVisitor<Edge>(
       fuseCheck.subtreeA,
       fuseCheck.blockedNodes,
-      fuseCheck.blownEdges
+      fuseCheck.blownEdges,
     );
 
     const visitorDiag = runVisitors(tree, [powerBalance, fuseCheck, edgeCurrent]);
@@ -200,15 +202,12 @@ class FlowEngine {
     const nodes: DomainNode[] = [];
 
     for (const node of graph.nodes) {
+      // only include enabled nodes;   
       if (!isEnabled(node.id, scenario)) continue;
-
-      let type: NodeType;
-      if (node.type === "battery") type = "battery";
-      else if (node.type === "distribution") type = "distribution";
-      else if (node.type === "load") type = "load";
-      else if (node.type === "source") type = "source";
-      else {
-        type = "distribution";
+      // if the node.type is not in the supported list NodeType, treat it as distribution and warn
+      const type = node.type;
+      if (!nodeTypes.includes(type as NodeType)) {
+        node.type = "distribution";
         diagnostics.push({
           severity: "warning",
           code: "UNSUPPORTED_NODE_TYPE",
@@ -219,7 +218,7 @@ class FlowEngine {
 
       nodes.push({ id: node.id, type, params: node.params });
     }
-
+    // Build a quick lookup for ports by nodeId:portId to validate edges and get domains/conductors.
     const portByKey = new Map<string, Port>();
     for (const node of graph.nodes) {
       if (!isEnabled(node.id, scenario)) continue;
@@ -227,7 +226,7 @@ class FlowEngine {
         portByKey.set(`${node.id}:${port.id}`, port);
       }
     }
-
+    // Only include edges that connect enabled nodes and have valid ports; warn about unsupported domains/conductors.
     const edges: Edge[] = [];
     for (const edge of graph.edges) {
       if (!isEnabled(edge.from.nodeId, scenario) || !isEnabled(edge.to.nodeId, scenario)) continue;
@@ -235,8 +234,8 @@ class FlowEngine {
 
       const fromKey = `${edge.from.nodeId}:${edge.from.portId}`;
       const toKey = `${edge.to.nodeId}:${edge.to.portId}`;
-      const fromPort = portByKey.get(fromKey);
-      const toPort = portByKey.get(toKey);
+      const fromPort = portByKey.get(fromKey) as Port;
+      const toPort = portByKey.get(toKey) as Port;
 
       if (!fromPort || !toPort) {
         diagnostics.push({

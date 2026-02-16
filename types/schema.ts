@@ -1,4 +1,5 @@
-export type NodeType = "source" | "battery" | "conversion" | "distribution" | "load";
+export const nodeTypes = ["source", "battery", "conversion", "distribution", "load"] as const;
+export type NodeType = typeof nodeTypes[number];
 
 export type Id = string
 

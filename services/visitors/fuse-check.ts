@@ -47,6 +47,8 @@ export class FuseCheckVisitor<E extends FuseEdge> implements TreeVisitor<E> {
   /** Edges where the fuse blew */
   readonly blownEdges = new Set<string>();
 
+  readonly unprotectedEdges = new Set<string>();
+
   constructor(
     private readonly nodes: FuseNode[],
     private readonly injectionsA: Map<string, number>
@@ -87,6 +89,26 @@ export class FuseCheckVisitor<E extends FuseEdge> implements TreeVisitor<E> {
         refs: [{ edgeId: edge.id }]
       });
       sum = 0;
+    }
+
+    // Warn about unprotected wires: if the edge is connected to a battery or source and doesn't have a fuse on it or connected node, flag it as unprotected
+    if (edge && !fuseA) {
+      const fromNode = this.nodes.find((n) => n.id === edge.from);
+      const toNode = this.nodes.find((n) => n.id === edge.to);
+      const fromType = fromNode?.type;
+
+      const isFromSource = fromType === "source" || fromType === "battery";
+      const isToFuse = toNode?.params?.ratingA !== undefined;
+      
+      if (isFromSource || isToFuse) {
+        this.unprotectedEdges.add(edge.id);
+        this._diagnostics.push({
+          severity: "warning",
+          code: "UNPROTECTED_WIRE",
+          message: "Unprotected wire detected; consider adding a fuse.",
+          refs: [{ edgeId: edge.id }]
+        });
+      }
     }
 
     this.subtreeA.set(nodeId, sum);
