@@ -1,8 +1,8 @@
 /* =========================================================
  * Simple Flow Engine (12V only)
  * - Compatible signature with flow-engine.ts
- * - Nodes: battery(storage), distribution, load
- * - No converters, no charging, POS only
+ * - Nodes: battery(storage), distribution, load, source
+ * - Charging supported, no converters, POS only
  * ========================================================= */
 
 import type {
@@ -16,7 +16,7 @@ import type {
   NodeFlow,
   Port,
   ScenarioInput
-} from "~/services/flow-engine";
+} from "~/types/flow";
 
 export type {
   BaseNode,
@@ -31,11 +31,11 @@ export type {
   ScenarioInput
 };
 
-type SimpleNodeType = "battery" | "distribution" | "load";
+type NodeType = "battery" | "distribution" | "load" | "source";
 
 interface SimpleNode {
   id: string;
-  type: SimpleNodeType;
+  type: NodeType;
   params?: Record<string, unknown>;
 }
 
@@ -48,7 +48,7 @@ interface SimpleEdge {
 }
 
 const DEFAULT_V = 12;
-const SUPPORTED_DOMAIN = "DC_12V";
+const SUPPORTED_DOMAIN = "dc";
 const SUPPORTED_CONDUCTOR = "POS";
 
 const isEnabled = (nodeId: string, scenario: ScenarioInput) => {
@@ -56,17 +56,32 @@ const isEnabled = (nodeId: string, scenario: ScenarioInput) => {
   return enabled !== false;
 };
 
+const isSupportedDomain = (domain: string) => {
+  const lower = domain.toLowerCase();
+  return lower === "dc" || lower.startsWith("dc");
+};
+
 const numberParam = (params: Record<string, unknown> | undefined, key: string) => {
   const value = params?.[key];
   return typeof value === "number" && Number.isFinite(value) ? value : undefined;
 };
 
+// Convert a load's params into watts (demand side of the balance).
 const loadDemandW = (node: SimpleNode, V: number) => {
   const watts = numberParam(node.params, "watts");
   const amps = numberParam(node.params, "amps");
   const duty = numberParam(node.params, "dutyCycle") ?? 1;
   const baseW = typeof watts === "number" ? watts : typeof amps === "number" ? amps * V : 0;
   return Math.max(0, baseW) * Math.max(0, duty);
+};
+
+// Convert a source's params into a max available power (watts).
+const sourceCapW = (node: SimpleNode, V: number) => {
+  const availableW = numberParam(node.params, "availableW");
+  const maxOutA = numberParam(node.params, "maxOutA");
+  if (typeof availableW === "number") return Math.max(0, availableW);
+  if (typeof maxOutA === "number") return Math.max(0, maxOutA) * V;
+  return 0;
 };
 
 class SimpleFlowEngine {
@@ -81,6 +96,7 @@ class SimpleFlowEngine {
     const edgesOut: Record<string, EdgeFlow> = {};
     const nodesOut: Record<string, NodeFlow> = {};
 
+    // Phase 1: map the rich graph into a small 12V POS-only model.
     const { nodes, edges, diagnostics: mapDiagnostics } = this.mapGraph(this.input.graph, this.scenario);
     diagnostics.push(...mapDiagnostics);
 
@@ -105,6 +121,7 @@ class SimpleFlowEngine {
     const battery = batteries[0];
     const V = this.resolveVoltage(battery);
 
+    // Phase 2: build a spanning tree from the battery to route currents.
     const adjacency = this.buildAdjacency(edges);
     const tree = this.buildTree(battery.id, adjacency, edges);
 
@@ -128,44 +145,18 @@ class SimpleFlowEngine {
       });
     }
 
-    const demandByNode = new Map<string, number>();
-    let totalDemandW = 0;
-    let connectedDemandW = 0;
+    // Phase 3: balance power (sources -> loads, battery fills or absorbs the remainder).
+    const balance = this.balance(nodes, tree, battery, V, diagnostics);
+    Object.assign(nodesOut, balance.nodeFlows);
 
-    for (const node of nodes) {
-      if (node.type !== "load") continue;
-      const demandW = loadDemandW(node, V);
-      demandByNode.set(node.id, demandW);
-      totalDemandW += demandW;
-      if (tree.parent.has(node.id)) connectedDemandW += demandW;
-    }
-
-    const maxDischargeA = numberParam(battery.params, "maxDischargeA") ?? Number.POSITIVE_INFINITY;
-    const maxDischargeW = maxDischargeA * V;
-    const servedFactor = connectedDemandW > 0 ? Math.min(1, maxDischargeW / connectedDemandW) : 1;
-
-    if (servedFactor < 1) {
-      diagnostics.push({
-        severity: "warning",
-        code: "BATTERY_CLAMPED",
-        message: "Battery max discharge exceeded; loads scaled proportionally."
-      });
-    }
-
-    for (const node of nodes) {
-      if (node.type !== "load") continue;
-      nodesOut[node.id] = { demandW: demandByNode.get(node.id) ?? 0 };
-    }
-
+    // Phase 4: compute subtree current sums on the tree (positive = demand, negative = supply).
     const subtreeA = new Map<string, number>();
     const subtreeNodes = new Map<string, Set<string>>();
     const blockedNodes = new Set<string>();
     const blownEdges = new Set<string>();
 
     for (const node of nodes) {
-      const demandW = demandByNode.get(node.id) ?? 0;
-      const servedW = node.type === "load" && tree.parent.has(node.id) ? demandW * servedFactor : 0;
-      subtreeA.set(node.id, V > 0 ? servedW / V : 0);
+      subtreeA.set(node.id, balance.injectionsA.get(node.id) ?? 0);
       subtreeNodes.set(node.id, new Set([node.id]));
     }
 
@@ -180,13 +171,14 @@ class SimpleFlowEngine {
         if (childNodes) childNodes.forEach((id) => nodesInSubtree.add(id));
       }
 
+      // Fuse logic: if subtree current exceeds fuseA, open the fuse and zero that subtree.
       const edge = tree.parentEdge.get(nodeId);
       const node = nodes.find((n) => n.id === nodeId);
       const nodeFuseA = numberParam(node?.params, "ratingA");
       const edgeFuseA = edge?.fuseA;
       const fuseA = edgeFuseA ?? nodeFuseA;
 
-      if (edge && fuseA && sum > fuseA + 1e-6) {
+      if (edge && fuseA && Math.abs(sum) > fuseA + 1e-6) {
         blownEdges.add(edge.id);
         nodesInSubtree.forEach((id) => blockedNodes.add(id));
         diagnostics.push({
@@ -215,13 +207,7 @@ class SimpleFlowEngine {
       });
     }
 
-    const rootCurrentA = subtreeA.get(battery.id) ?? 0;
-    nodesOut[battery.id] = {
-      netA: -rootCurrentA,
-      state: rootCurrentA > 1e-6 ? "discharging" : "idle",
-      clampedBy: servedFactor < 1 ? ["battery.maxDischargeA"] : undefined
-    };
-
+    // Assign edge currents from subtree sums.
     for (const [child, edge] of tree.parentEdge.entries()) {
       if (!edge) continue; // root
       const parent = tree.parent.get(child) as string;
@@ -263,12 +249,21 @@ class SimpleFlowEngine {
       if (!edgesOut[edge.id]) edgesOut[edge.id] = { currentA: 0 };
     }
 
+    // Derive battery net current from solved edge flows.
+    const edgeById = new Map(this.input.graph.edges.map((edge) => [edge.id, edge]));
+    const batteryNetA = this.sumBatteryCurrent(battery.id, edgesOut, edgeById);
+    const batteryFlow = nodesOut[battery.id] ?? {};
+    nodesOut[battery.id] = {
+      ...batteryFlow,
+      netA: batteryNetA,
+      state: batteryNetA > 1e-6 ? "charging" : batteryNetA < -1e-6 ? "discharging" : "idle"
+    };
+
     const hasError = diagnostics.some((d) => d.severity === "error");
-    const hasUnserved = servedFactor < 1 || disconnectedLoads.length > 0;
+    const hasUnserved = balance.hasUnserved || disconnectedLoads.length > 0 || blockedNodes.size > 0;
     const status: FlowOutput["status"] = hasError ? "failed" : hasUnserved ? "partial" : "ok";
 
-    const deliveredW = rootCurrentA * V;
-    return this.finish(status, diagnostics, edgesOut, nodesOut, totalDemandW, deliveredW);
+    return this.finish(status, diagnostics, edgesOut, nodesOut, balance.totalDemandW, balance.totalSupplyW);
   }
 
   private resolveVoltage(battery: SimpleNode) {
@@ -279,6 +274,7 @@ class SimpleFlowEngine {
     return DEFAULT_V;
   }
 
+  // Reduce to a simple model: only DC POS edges and enabled nodes.
   private mapGraph(graph: GraphInput, scenario: ScenarioInput) {
     const diagnostics: Diagnostic[] = [];
     const nodes: SimpleNode[] = [];
@@ -286,10 +282,11 @@ class SimpleFlowEngine {
     for (const node of graph.nodes) {
       if (!isEnabled(node.id, scenario)) continue;
 
-      let type: SimpleNodeType;
+      let type: NodeType;
       if (node.type === "storage") type = "battery";
       else if (node.type === "distribution") type = "distribution";
       else if (node.type === "load") type = "load";
+      else if (node.type === "source") type = "source";
       else {
         type = "distribution";
         diagnostics.push({
@@ -314,7 +311,7 @@ class SimpleFlowEngine {
     const edges: SimpleEdge[] = [];
     for (const edge of graph.edges) {
       if (!isEnabled(edge.from.nodeId, scenario) || !isEnabled(edge.to.nodeId, scenario)) continue;
-      if (edge.from.nodeId === edge.to.nodeId) continue; // internal wiring ignored
+      if (edge.from.nodeId === edge.to.nodeId) continue; // internal wiring ignored in simple mode
 
       const fromKey = `${edge.from.nodeId}:${edge.from.portId}`;
       const toKey = `${edge.to.nodeId}:${edge.to.portId}`;
@@ -331,11 +328,11 @@ class SimpleFlowEngine {
         continue;
       }
 
-      if (fromPort.domain !== SUPPORTED_DOMAIN || toPort.domain !== SUPPORTED_DOMAIN) {
+      if (!isSupportedDomain(fromPort.domain) || !isSupportedDomain(toPort.domain)) {
         diagnostics.push({
           severity: "warning",
           code: "EDGE_DOMAIN_UNSUPPORTED",
-          message: "Edge domain is not DC_12V; ignored in simple mode.",
+          message: "Edge domain is not DC; ignored in simple mode.",
           refs: [{ edgeId: edge.id }]
         });
         continue;
@@ -363,6 +360,7 @@ class SimpleFlowEngine {
     return { nodes, edges, diagnostics };
   }
 
+  // Undirected adjacency; the flow direction is resolved later from the tree.
   private buildAdjacency(edges: SimpleEdge[]) {
     const adjacency = new Map<string, { edge: SimpleEdge; other: string }[]>();
     for (const edge of edges) {
@@ -371,10 +369,10 @@ class SimpleFlowEngine {
       adjacency.get(edge.from)!.push({ edge, other: edge.to });
       adjacency.get(edge.to)!.push({ edge, other: edge.from });
     }
-    console.dir(adjacency);
     return adjacency;
   }
 
+  // BFS spanning tree: we route all currents through it (parallel paths ignored).
   private buildTree(
     rootId: string,
     adjacency: Map<string, { edge: SimpleEdge; other: string }[]>,
@@ -417,6 +415,161 @@ class SimpleFlowEngine {
     const nonTreeEdges = edges.filter((edge) => !treeEdgeIds.has(edge.id));
 
     return { parent, parentEdge, children, postorder, nonTreeEdges };
+  }
+
+  // Determine how much each node injects (+) or supplies (-) in amps.
+  // Loads are +A, sources are -A, battery takes the remainder (+charge or -discharge).
+  private balance(
+    nodes: SimpleNode[],
+    tree: ReturnType<SimpleFlowEngine["buildTree"]>,
+    battery: SimpleNode,
+    V: number,
+    diagnostics: Diagnostic[]
+  ) {
+    const nodeFlows: Record<string, NodeFlow> = {};
+    const injectionsA = new Map<string, number>();
+
+    const demandByNode = new Map<string, number>();
+    const supplyCapByNode = new Map<string, number>();
+
+    let totalDemandW = 0;
+    let connectedDemandW = 0;
+
+    // Build load demand and source capacities (only for connected nodes).
+    for (const node of nodes) {
+      if (node.type === "load") {
+        const demandW = loadDemandW(node, V);
+        demandByNode.set(node.id, demandW);
+        totalDemandW += demandW;
+        if (tree.parent.has(node.id)) connectedDemandW += demandW;
+        nodeFlows[node.id] = { demandW };
+      }
+
+      if (node.type === "source" && tree.parent.has(node.id)) {
+        const capW = sourceCapW(node, V);
+        supplyCapByNode.set(node.id, capW);
+      }
+    }
+
+    const maxDischargeA = numberParam(battery.params, "maxDischargeA") ?? Number.POSITIVE_INFINITY;
+    const maxChargeA = numberParam(battery.params, "maxChargeA") ?? maxDischargeA;
+    const maxDischargeW = maxDischargeA * V;
+    const maxChargeW = maxChargeA * V;
+
+    // If supply+discharge can't cover demand, scale loads proportionally.
+    const totalSupplyCapW = Array.from(supplyCapByNode.values()).reduce((a, b) => a + b, 0) + maxDischargeW;
+    const servedFactor = connectedDemandW > 0 ? Math.min(1, totalSupplyCapW / connectedDemandW) : 1;
+    const servedDemandW = connectedDemandW * servedFactor;
+
+    if (servedFactor < 1) {
+      diagnostics.push({
+        severity: "warning",
+        code: "UNSERVED_DEMAND",
+        message: "Demand exceeds available supply; loads scaled proportionally."
+      });
+    }
+
+    for (const node of nodes) {
+      if (node.type !== "load") continue;
+      const demandW = demandByNode.get(node.id) ?? 0;
+      const servedW = tree.parent.has(node.id) ? demandW * servedFactor : 0;
+      injectionsA.set(node.id, V > 0 ? servedW / V : 0);
+      if (servedFactor < 1 && servedW < demandW) {
+        nodeFlows[node.id] = { ...nodeFlows[node.id], clampedBy: ["supply.shortage"] };
+      }
+    }
+
+    // Supply budget: cover served demand first, then allow extra for charging if possible.
+    const supplyBudgetW = servedDemandW + (servedFactor === 1 ? maxChargeW : 0);
+    const sources = Array.from(supplyCapByNode.entries());
+    const dispatchPolicy = this.scenario.dispatchPolicy ?? "priority_order";
+    const priority = this.scenario.sourcePriority ?? [];
+
+    if (dispatchPolicy === "priority_order" && priority.length > 0) {
+      const rank = new Map(priority.map((id, idx) => [id, idx]));
+      sources.sort((a, b) => (rank.get(a[0]) ?? 999999) - (rank.get(b[0]) ?? 999999));
+    }
+
+    let usedSupplyW = 0;
+    if (dispatchPolicy === "share_proportionally") {
+      const totalCap = sources.reduce((a, [, cap]) => a + cap, 0);
+      for (const [id, cap] of sources) {
+        const use = totalCap > 0 ? Math.min(cap, (cap / totalCap) * supplyBudgetW) : 0;
+        usedSupplyW += use;
+        nodeFlows[id] = { supplyW: use };
+        injectionsA.set(id, V > 0 ? -use / V : 0);
+      }
+    } else {
+      let remaining = supplyBudgetW;
+      for (const [id, cap] of sources) {
+        if (remaining <= 1e-6) {
+          nodeFlows[id] = { supplyW: 0 };
+          injectionsA.set(id, 0);
+          continue;
+        }
+        const use = Math.min(cap, remaining);
+        remaining -= use;
+        usedSupplyW += use;
+        nodeFlows[id] = { supplyW: use };
+        injectionsA.set(id, V > 0 ? -use / V : 0);
+      }
+    }
+
+    // Battery handles whatever the sources didn't (negative) or excess (positive).
+    const netFromSourcesW = usedSupplyW - servedDemandW;
+    let batteryNetA = 0;
+    const batteryFlow: NodeFlow = {};
+
+    if (netFromSourcesW >= 0) {
+      const chargeW = Math.min(netFromSourcesW, maxChargeW);
+      batteryNetA = V > 0 ? chargeW / V : 0;
+      if (netFromSourcesW - chargeW > 1e-6) {
+        diagnostics.push({
+          severity: "warning",
+          code: "EXCESS_SUPPLY",
+          message: "Supply exceeds load and battery charge limit; excess is unused."
+        });
+        batteryFlow.clampedBy = ["battery.maxChargeA"];
+      }
+    } else {
+      const dischargeW = Math.min(-netFromSourcesW, maxDischargeW);
+      batteryNetA = V > 0 ? -dischargeW / V : 0;
+      if (servedFactor === 1 && -netFromSourcesW - dischargeW > 1e-6) {
+        diagnostics.push({
+          severity: "warning",
+          code: "UNSERVED_DEMAND",
+          message: "Battery discharge limit prevents serving all demand."
+        });
+        batteryFlow.clampedBy = ["battery.maxDischargeA"];
+      }
+    }
+
+    nodeFlows[battery.id] = {
+      netA: batteryNetA,
+      state: batteryNetA > 1e-6 ? "charging" : batteryNetA < -1e-6 ? "discharging" : "idle",
+      ...batteryFlow
+    };
+
+    const hasUnserved = servedFactor < 1;
+    const totalSupplyW = usedSupplyW + Math.max(0, -batteryNetA * V);
+
+    return { injectionsA, nodeFlows, totalDemandW, totalSupplyW, hasUnserved };
+  }
+
+  private sumBatteryCurrent(
+    batteryId: string,
+    edges: Record<string, EdgeFlow>,
+    edgeById: Map<string, Edge>
+  ) {
+    let netA = 0;
+    for (const [edgeId, flow] of Object.entries(edges)) {
+      if (!flow) continue;
+      const edge = edgeById.get(edgeId);
+      if (!edge) continue;
+      if (edge.to.nodeId === batteryId) netA += flow.currentA;
+      if (edge.from.nodeId === batteryId) netA -= flow.currentA;
+    }
+    return netA;
   }
 
   private finish(

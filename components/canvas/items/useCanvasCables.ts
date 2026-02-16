@@ -165,7 +165,7 @@ export const useCanvasCables = ({ layer, schemaStore }: CanvasCablesOptions) => 
     })
 
     const text = new Konva.Text({
-      text: `⌀${cable.props.gaugeAwg}`,
+      text: `⌀${cable.wire.gaugeAwg ?? 0}`,
       fontSize: CABLE_GAUGE_HINT_FONT_SIZE,
       fontFamily: 'Space Grotesk, sans-serif',
       fill: CABLE_GAUGE_HINT_COLOR,
@@ -227,7 +227,7 @@ export const useCanvasCables = ({ layer, schemaStore }: CanvasCablesOptions) => 
       points: [0, 0, 0, 0],
       stroke: '#e64141ff',
       fill: '#e64141ff',
-      strokeWidth: getCableLineStrokeWidth(cable.props.gaugeAwg),
+      strokeWidth: getCableLineStrokeWidth(cable.wire.gaugeAwg ?? 0),
       lineCap: 'round',
       lineJoin: 'round',
       hitStrokeWidth: 12,
@@ -260,7 +260,7 @@ export const useCanvasCables = ({ layer, schemaStore }: CanvasCablesOptions) => 
   const syncCables = (cables: Cable[]) => {
     cables.forEach((cable) => {
       const line = ensureCable(cable)
-      line.strokeWidth(getCableLineStrokeWidth(cable.props.gaugeAwg))
+      line.strokeWidth(getCableLineStrokeWidth(cable.wire.gaugeAwg ?? 0))
       line.zIndex(1)
       ensureCableBadge(cable.id)
       ensureCableGaugeLabel(cable)
@@ -306,8 +306,8 @@ export const useCanvasCables = ({ layer, schemaStore }: CanvasCablesOptions) => 
     lineMap.forEach((line, cableId) => {
       const cable = schemaStore.schema.cables.find((item) => item.id === cableId)
       if (!cable) return
-      const sourceCenter = getNodeCenter(cable.sourceId)
-      const targetCenter = getNodeCenter(cable.targetId)
+      const sourceCenter = getNodeCenter(cable.from.nodeId)
+      const targetCenter = getNodeCenter(cable.to.nodeId)
 
       if (!sourceCenter || !targetCenter) return
       
@@ -323,7 +323,7 @@ export const useCanvasCables = ({ layer, schemaStore }: CanvasCablesOptions) => 
         const textNode = gaugeLabel.findOne<Konva.Text>('.cable-gauge-text')
         const backgroundNode = gaugeLabel.findOne<Konva.Rect>('.cable-gauge-bg')
         if (!textNode || !backgroundNode) return
-        const gaugeText = `⌀${cable.props.gaugeAwg}`
+        const gaugeText = `⌀${cable.wire.gaugeAwg ?? 0}`
         if (textNode.text() !== gaugeText) textNode.text(gaugeText)
         const { x, y, angle } = getPolylineMidpointWithAngle(points)
         const textWidth = textNode.getTextWidth()
@@ -429,8 +429,8 @@ export const useCanvasCables = ({ layer, schemaStore }: CanvasCablesOptions) => 
       }
 
       const disabled =
-        !schemaStore.isComponentEnabled(cable.sourceId) ||
-        !schemaStore.isComponentEnabled(cable.targetId)
+        !schemaStore.isComponentEnabled(cable.from.nodeId) ||
+        !schemaStore.isComponentEnabled(cable.to.nodeId)
 
       line.stroke(stroke)
       line.fill(stroke)

@@ -2,6 +2,7 @@ import Konva from 'konva'
 import type { Ref } from 'vue'
 import type { useSchemaStore } from '~/stores/schema'
 import type { ComponentInstance } from '~/types/schema'
+import { estimateAmpacityForAwg } from '~/services/cable'
 import { NODE_HEIGHT, NODE_SCALE, NODE_WIDTH, type CanvasMode } from './constants'
 
 type CanvasNodesOptions = {
@@ -174,20 +175,36 @@ export const useCanvasNodes = ({
     const connectionExists = (sourceId: string, targetId: string) =>
       schemaStore.schema.cables.some(
         (cable) =>
-          (cable.sourceId === sourceId && cable.targetId === targetId) ||
-          (cable.sourceId === targetId && cable.targetId === sourceId),
+          (cable.from.nodeId === sourceId && cable.to.nodeId === targetId) ||
+          (cable.from.nodeId === targetId && cable.to.nodeId === sourceId),
       )
+
+    const pickPortId = (component: ComponentInstance, direction: 'in' | 'out') => {
+      const candidates = component.ports.filter(
+        (port) => port.dir === direction || port.dir === 'bidirectional',
+      )
+      const fallback = candidates[0] ?? component.ports[0]
+      return fallback?.id ?? null
+    }
 
     const createCable = (sourceId: string, targetId: string) => {
       if (connectionExists(sourceId, targetId)) return null
+      const source = schemaStore.schema.components.find((component) => component.id === sourceId)
+      const target = schemaStore.schema.components.find((component) => component.id === targetId)
+      if (!source || !target) return null
+
+      const fromPortId = pickPortId(source, 'out')
+      const toPortId = pickPortId(target, 'in')
+      if (!fromPortId || !toPortId) return null
 
       const newCableId = `cable-${Date.now()}`
+      const gaugeAwg = 8
       schemaStore.addCable({
         id: newCableId,
         name: `Cable ${sourceId} → ${targetId}`,
-        sourceId,
-        targetId,
-        props: { lengthM: 2, gaugeAwg: 8 },
+        from: { nodeId: sourceId, portId: fromPortId },
+        to: { nodeId: targetId, portId: toPortId },
+        wire: { lengthM: 2, gaugeAwg, maxA: estimateAmpacityForAwg(gaugeAwg) },
         derived: {
           ampacityA: 0,
           expectedCurrentA: 0,

@@ -3,7 +3,7 @@
  * Compatible with computeFlow() GraphInput
  * ========================================================= */
 
-import type { GraphInput, BaseNode, Edge, Port, Wire, Protection } from '~/services/flow-engine'
+import type { GraphInput, BaseNode, Edge, Port, Wire, Protection } from '~/types/flow'
 
 type Id = string;
 type PortRef = { nodeId: Id; portId: Id };

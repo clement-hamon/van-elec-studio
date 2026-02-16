@@ -1,4 +1,4 @@
-import type { CableDerived, CableProps } from '~/types/schema'
+import type { CableDerived, CableWire } from '~/types/schema'
 
 const COPPER_RESISTIVITY = 1.724e-8
 
@@ -45,18 +45,19 @@ export const estimateAmpacityForAwg = (awg: number) => {
 }
 
 export const computeCableDerived = (
-  props: CableProps,
+  wire: CableWire,
   expectedCurrentA = 0,
   expectedPowerW = 0,
   circuitVoltageV = 0,
 ): CableDerived => {
-  const length = Math.max(0, props.lengthM)
-  const resistance = resistancePerMeter(props.gaugeAwg)
+  const length = Math.max(0, wire.lengthM ?? 0)
+  const gaugeAwg = wire.gaugeAwg ?? 0
+  const resistance = resistancePerMeter(gaugeAwg)
   const loopResistance = resistance * length * 2
   const voltageDrop = loopResistance * expectedCurrentA
 
   return {
-    ampacityA: estimateAmpacityForAwg(props.gaugeAwg),
+    ampacityA: estimateAmpacityForAwg(gaugeAwg),
     expectedCurrentA,
     expectedPowerW,
     circuitVoltageV,

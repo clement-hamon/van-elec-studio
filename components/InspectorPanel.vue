@@ -53,9 +53,9 @@
       <div v-else class="port-list">
         <div v-for="port in componentPorts" :key="port.id" class="port-row">
           <div class="port-label">
-            {{ port.label }} <span class="port-id">({{ port.id }})</span>
+            {{ port.label ?? port.id }} <span class="port-id">({{ port.id }})</span>
           </div>
-          <div class="port-meta">{{ port.direction }} · {{ port.domain.toUpperCase() }}</div>
+          <div class="port-meta">{{ port.dir }} · {{ port.domain.toUpperCase() }}</div>
         </div>
       </div>
     </section>
@@ -195,7 +195,7 @@ const componentType = computed(() => {
   return schemaStore.registry.find((item) => item.id === selectedComponent.value?.typeId) ?? null
 })
 
-const componentPorts = computed(() => componentType.value?.ports ?? [])
+const componentPorts = computed(() => selectedComponent.value?.ports ?? [])
 
 const showScenarioToggle = computed(() => !!selectedComponent.value)
 
@@ -209,41 +209,49 @@ const componentEnabled = computed({
 
 const cableDirectionLabel = computed(() => {
   if (!selectedCable.value) return ''
-  const sourcePort = selectedCable.value.sourcePortId ? `:${selectedCable.value.sourcePortId}` : ''
-  const targetPort = selectedCable.value.targetPortId ? `:${selectedCable.value.targetPortId}` : ''
-  return `${selectedCable.value.sourceId}${sourcePort} → ${selectedCable.value.targetId}${targetPort}`
+  const sourcePort = selectedCable.value.from.portId ? `:${selectedCable.value.from.portId}` : ''
+  const targetPort = selectedCable.value.to.portId ? `:${selectedCable.value.to.portId}` : ''
+  return `${selectedCable.value.from.nodeId}${sourcePort} → ${selectedCable.value.to.nodeId}${targetPort}`
 })
 
 const componentFields = computed(() => componentType.value?.fields ?? [])
 
 const sourceComponent = computed(() => {
   if (!selectedCable.value) return null
-  return schemaStore.schema.components.find((component) => component.id === selectedCable.value?.sourceId) ?? null
+  return (
+    schemaStore.schema.components.find(
+      (component) => component.id === selectedCable.value?.from.nodeId,
+    ) ?? null
+  )
 })
 
 const targetComponent = computed(() => {
   if (!selectedCable.value) return null
-  return schemaStore.schema.components.find((component) => component.id === selectedCable.value?.targetId) ?? null
+  return (
+    schemaStore.schema.components.find(
+      (component) => component.id === selectedCable.value?.to.nodeId,
+    ) ?? null
+  )
 })
 
 const sourcePortOptions = computed(() => {
-  const component = sourceComponent.value
-  if (!component) return []
-  const type = schemaStore.registry.find((item) => item.id === component.typeId)
-  if (!type) return []
-  return type.ports.map((port) => ({ value: port.id, label: `${port.label} (${port.id})` }))
+  if (!sourceComponent.value) return []
+  return sourceComponent.value.ports.map((port) => ({
+    value: port.id,
+    label: `${port.label ?? port.id} (${port.id})`,
+  }))
 })
 
 const targetPortOptions = computed(() => {
-  const component = targetComponent.value
-  if (!component) return []
-  const type = schemaStore.registry.find((item) => item.id === component.typeId)
-  if (!type) return []
-  return type.ports.map((port) => ({ value: port.id, label: `${port.label} (${port.id})` }))
+  if (!targetComponent.value) return []
+  return targetComponent.value.ports.map((port) => ({
+    value: port.id,
+    label: `${port.label ?? port.id} (${port.id})`,
+  }))
 })
 
-const cableSourcePortId = computed(() => selectedCable.value?.sourcePortId ?? '')
-const cableTargetPortId = computed(() => selectedCable.value?.targetPortId ?? '')
+const cableSourcePortId = computed(() => selectedCable.value?.from.portId ?? '')
+const cableTargetPortId = computed(() => selectedCable.value?.to.portId ?? '')
 
 const componentName = computed({
   get: () => selectedComponent.value?.name ?? '',
@@ -257,7 +265,7 @@ const fieldId = (key: string) => `component-field-${key}`
 
 const componentFieldValue = (field: ComponentFieldDefinition) => {
   if (!selectedComponent.value) return ''
-  const value = selectedComponent.value.props[field.key]
+  const value = selectedComponent.value.params[field.key]
   if (value === undefined || value === null) return ''
   return value
 }
@@ -286,7 +294,7 @@ const onComponentFieldInput = (field: ComponentFieldDefinition, event: Event) =>
   if (value === null) return
 
   schemaStore.updateComponent(selectedComponent.value.id, {
-    props: { ...selectedComponent.value.props, [field.key]: value },
+    params: { ...selectedComponent.value.params, [field.key]: value },
   })
 }
 
@@ -299,28 +307,28 @@ const cableName = computed({
 })
 
 const cableLength = computed({
-  get: () => selectedCable.value?.props.lengthM ?? 0,
+  get: () => selectedCable.value?.wire.lengthM ?? 0,
   set: (value: number) => {
     if (!selectedCable.value) return
     schemaStore.updateCable(selectedCable.value.id, {
-      props: { ...selectedCable.value.props, lengthM: value },
+      wire: { ...selectedCable.value.wire, lengthM: value },
     })
   },
 })
 
 const cableGauge = computed({
-  get: () => selectedCable.value?.props.gaugeAwg ?? 0,
+  get: () => selectedCable.value?.wire.gaugeAwg ?? 0,
   set: (value: number) => {
     if (!selectedCable.value) return
     schemaStore.updateCable(selectedCable.value.id, {
-      props: { ...selectedCable.value.props, gaugeAwg: value },
+      wire: { ...selectedCable.value.wire, gaugeAwg: value },
     })
   },
 })
 
 const cableGaugeMm2 = computed(() => {
   if (!selectedCable.value) return '0.00'
-  return awgToMm2(selectedCable.value.props.gaugeAwg).toFixed(2)
+  return awgToMm2(selectedCable.value.wire.gaugeAwg ?? 0).toFixed(2)
 })
 
 const cableExpectedCurrent = computed(() =>
@@ -346,14 +354,18 @@ const onSourcePortChange = (event: Event) => {
   if (!selectedCable.value) return
   const target = event.target as HTMLSelectElement | null
   if (!target) return
-  schemaStore.updateCable(selectedCable.value.id, { sourcePortId: target.value })
+  schemaStore.updateCable(selectedCable.value.id, {
+    from: { ...selectedCable.value.from, portId: target.value },
+  })
 }
 
 const onTargetPortChange = (event: Event) => {
   if (!selectedCable.value) return
   const target = event.target as HTMLSelectElement | null
   if (!target) return
-  schemaStore.updateCable(selectedCable.value.id, { targetPortId: target.value })
+  schemaStore.updateCable(selectedCable.value.id, {
+    to: { ...selectedCable.value.to, portId: target.value },
+  })
 }
 
 </script>

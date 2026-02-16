@@ -78,7 +78,7 @@ describe("flow-engine-simple", () => {
     expect(result.status).toBe("partial");
     expect(result.nodes.bat?.netA).toBeCloseTo(-5);
     expect(result.edges.e1?.currentA).toBeCloseTo(5);
-    expect(result.diagnostics.some((d) => d.code === "BATTERY_CLAMPED")).toBe(true);
+    expect(result.diagnostics.some((d) => d.code === "UNSERVED_DEMAND")).toBe(true);
   });
 
   it("opens a fuse and unserves downstream loads", () => {

@@ -1,9 +1,16 @@
-export type Id = string
+import type {
+  BaseNode,
+  Conductor,
+  Direction,
+  Domain,
+  Edge,
+  NodeType,
+  Port,
+  ScenarioInput,
+  Wire,
+} from '~/types/flow'
 
-export type NodeType = 'source' | 'storage' | 'conversion' | 'distribution' | 'load'
-export type PortDomain = 'dc' | 'ac'
-export type PortDirection = 'in' | 'out' | 'bidirectional'
-export type PortConductor = 'POS' | 'NEG' | 'CHASSIS' | 'L' | 'N' | 'PE'
+export type Id = string
 
 export type ComponentFieldType = 'text' | 'number' | 'select'
 
@@ -26,8 +33,8 @@ export type ComponentType = {
   id: string
   label: string
   description?: string
-  nodeType: NodeType
-  defaultProps: Record<string, number | string | boolean>
+  type: NodeType
+  defaultParams: Record<string, number | string | boolean>
   fields?: ComponentFieldDefinition[]
   ports: PortDefinition[]
 }
@@ -35,33 +42,27 @@ export type ComponentType = {
 export type PortDefinition = {
   id: string
   label: string
-  direction: PortDirection
-  domain: PortDomain
-  conductor: PortConductor
+  direction: Direction
+  domain: Domain
+  conductor: Conductor
 }
 
-export type ComponentInstance = {
-  id: Id
+export type ComponentInstance = BaseNode & {
   typeId: string
   name: string
   position: Position
-  props: Record<string, number | string | boolean>
+  params: Record<string, number | string | boolean>
+  ports: (Port & { label?: string })[]
 }
 
-export type Cable = {
-  id: Id
+export type CableWire = Wire & {
+  gaugeAwg?: number
+}
+
+export type Cable = Edge & {
   name: string
-  sourceId: Id
-  targetId: Id
-  sourcePortId?: Id
-  targetPortId?: Id
-  props: CableProps
+  wire: CableWire
   derived: CableDerived
-}
-
-export type CableProps = {
-  lengthM: number
-  gaugeAwg: number
 }
 
 export type CableDerived = {
@@ -87,12 +88,7 @@ export type SchemaState = {
   updatedAt: string
 }
 
-export type ScenarioState = {
-  enabledNodes?: Record<Id, boolean>
-  domainVoltage?: Record<string, number>
-  dispatchPolicy?: 'priority_order' | 'share_proportionally'
-  sourcePriority?: Id[]
-}
+export type ScenarioState = ScenarioInput
 
 export type SelectionState = {
   componentId?: Id

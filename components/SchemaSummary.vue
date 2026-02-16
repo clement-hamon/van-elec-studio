@@ -58,8 +58,8 @@ const groupedByGauge = computed<GaugeGroup[]>(() => {
   >()
 
   props.cables.forEach((cable) => {
-    const gaugeAwg = normalizeNumber(cable.props?.gaugeAwg)
-    const lengthM = normalizeNumber(cable.props?.lengthM)
+    const gaugeAwg = normalizeNumber(cable.wire?.gaugeAwg)
+    const lengthM = normalizeNumber(cable.wire?.lengthM)
     const gaugeKey = `${gaugeAwg ?? 'na'}`
     const lengthKey = `${lengthM ?? 'na'}`
 

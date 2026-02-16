@@ -1,15 +1,8 @@
 import type { ComponentFieldDefinition } from '~/types/schema'
 
 export const fieldVoltage: ComponentFieldDefinition = {
-  key: 'voltage',
-  label: 'Voltage (V)',
-  type: 'number',
-  step: 0.1,
-}
-
-export const fieldOperatingVoltage: ComponentFieldDefinition = {
-  key: 'operatingVoltage',
-  label: 'Operating Voltage (V)',
+  key: 'nominalV',
+  label: 'Nominal Voltage (V)',
   type: 'number',
   step: 0.1,
 }
@@ -22,42 +15,21 @@ export const fieldCapacityAh: ComponentFieldDefinition = {
 }
 
 export const fieldMaxChargeCurrentA: ComponentFieldDefinition = {
-  key: 'maxChargeCurrentA',
+  key: 'maxChargeA',
   label: 'Max Charge Current (A)',
   type: 'number',
   step: 1,
 }
 
-export const fieldRecommendedChargeCurrentA: ComponentFieldDefinition = {
-  key: 'recommendedChargeCurrentA',
-  label: 'Recommended Charge Current (A)',
+export const fieldMaxDischargeCurrentA: ComponentFieldDefinition = {
+  key: 'maxDischargeA',
+  label: 'Max Discharge Current (A)',
   type: 'number',
   step: 1,
 }
 
-export const fieldRecommendedChargeVoltage: ComponentFieldDefinition = {
-  key: 'recommendedChargeVoltage',
-  label: 'Recommended Charge Voltage (V)',
-  type: 'number',
-  step: 0.1,
-}
-
-export const fieldChargeCutoffVoltage: ComponentFieldDefinition = {
-  key: 'chargeCutoffVoltage',
-  label: 'Charge Cutoff Voltage (V)',
-  type: 'number',
-  step: 0.1,
-}
-
-export const fieldChargeCutoffDurationMs: ComponentFieldDefinition = {
-  key: 'chargeCutoffDurationMs',
-  label: 'Charge Cutoff Duration (ms)',
-  type: 'number',
-  step: 100,
-}
-
 export const fieldWatt: ComponentFieldDefinition = {
-  key: 'watt',
+  key: 'watts',
   label: 'Power (W)',
   type: 'number',
   step: 1,
@@ -78,69 +50,45 @@ export const fieldRatingA: ComponentFieldDefinition = {
 }
 
 export const fieldCurrentA: ComponentFieldDefinition = {
-  key: 'currentA',
+  key: 'amps',
   label: 'Current (A)',
   type: 'number',
   step: 0.1,
 }
 
-export const fieldRatedCurrentA: ComponentFieldDefinition = {
-  key: 'ratedCurrentA',
-  label: 'Rated Current (A)',
+export const fieldDutyCycle: ComponentFieldDefinition = {
+  key: 'dutyCycle',
+  label: 'Duty Cycle (0-1)',
+  type: 'number',
+  step: 0.05,
+}
+
+export const fieldAvailableW: ComponentFieldDefinition = {
+  key: 'availableW',
+  label: 'Available Power (W)',
   type: 'number',
   step: 1,
 }
 
-export const fieldMaxInputVoltage: ComponentFieldDefinition = {
-  key: 'maxInputVoltage',
-  label: 'Max Input Voltage (V)',
-  type: 'number',
-  step: 0.1,
-}
-
-export const fieldMaxInputCurrentA: ComponentFieldDefinition = {
-  key: 'maxInputCurrentA',
-  label: 'Max Input Current (A)',
-  type: 'number',
-  step: 0.1,
-}
-
 export const fieldMaxOutputCurrentA: ComponentFieldDefinition = {
-  key: 'maxOutputCurrentA',
+  key: 'maxOutA',
   label: 'Max Output Current (A)',
   type: 'number',
   step: 0.1,
 }
 
-export const fieldInputVoltage: ComponentFieldDefinition = {
-  key: 'inputVoltage',
-  label: 'Input Voltage (V)',
-  type: 'number',
-  step: 0.1,
-}
-
-export const fieldInputVoltageSelect: ComponentFieldDefinition = {
-  key: 'inputVoltage',
-  label: 'Input Voltage (V)',
-  type: 'select',
-  options: [
-    { label: '120 V', value: 120 },
-    { label: '230 V', value: 230 },
-  ],
-}
-
-export const fieldOutputVoltage: ComponentFieldDefinition = {
-  key: 'outputVoltage',
-  label: 'Output Voltage (V)',
-  type: 'number',
-  step: 0.1,
-}
-
-export const fieldContinuousW: ComponentFieldDefinition = {
-  key: 'continuousW',
-  label: 'Continuous Power (W)',
+export const fieldMaxOutputW: ComponentFieldDefinition = {
+  key: 'maxOutW',
+  label: 'Max Output Power (W)',
   type: 'number',
   step: 1,
+}
+
+export const fieldEfficiency: ComponentFieldDefinition = {
+  key: 'efficiency',
+  label: 'Efficiency (0-1)',
+  type: 'number',
+  step: 0.01,
 }
 
 export const fieldMaxBranches: ComponentFieldDefinition = {
