@@ -52,7 +52,7 @@ interface Edge {
   id: string;
   from: string;
   to: string;
-  wire?: { maxA?: number };
+  wire?: { maxA?: number; lengthM?: number };
   fuseA?: number;
 }
 
@@ -271,7 +271,7 @@ class FlowEngine {
         id: edge.id,
         from: edge.from.nodeId,
         to: edge.to.nodeId,
-        wire: { maxA: edge.wire?.maxA },
+        wire: { maxA: edge.wire?.maxA, lengthM: edge.wire?.lengthM },
         fuseA: edge.protection?.fuseA
       });
     }

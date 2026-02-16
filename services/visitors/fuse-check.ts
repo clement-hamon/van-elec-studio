@@ -6,6 +6,7 @@ import type { TreeVisitor } from "./tree-visitor";
 
 export interface FuseEdge extends GraphEdge {
   fuseA?: number;
+  wire?: { lengthM?: number };
 }
 
 export interface FuseNode {
@@ -18,6 +19,13 @@ const numberParam = (params: Record<string, unknown> | undefined, key: string) =
   const v = params?.[key];
   return typeof v === "number" && Number.isFinite(v) ? v : undefined;
 };
+
+const isSourceNode = (node: FuseNode | undefined) =>
+  node?.type === "source" || node?.type === "battery";
+
+const isFuse = (node: FuseNode | undefined) => node?.params?.ratingA !== undefined;
+
+const MAX_FUSE_DISTANCE_M = 0.3;
 
 // ── Visitor ────────────────────────────────────────────────
 
@@ -92,20 +100,20 @@ export class FuseCheckVisitor<E extends FuseEdge> implements TreeVisitor<E> {
     }
 
     // Warn about unprotected wires: if the edge is connected to a battery or source and doesn't have a fuse on it or connected node, flag it as unprotected
-    if (edge && !fuseA) {
+    if (edge) {
       const fromNode = this.nodes.find((n) => n.id === edge.from);
       const toNode = this.nodes.find((n) => n.id === edge.to);
-      const fromType = fromNode?.type;
 
-      const isFromSource = fromType === "source" || fromType === "battery";
-      const isToFuse = toNode?.params?.ratingA !== undefined;
-      
-      if (isFromSource || isToFuse) {
+      const isFromSource = isSourceNode(fromNode);
+      const isToFuse = isFuse(toNode);
+      const isLongWire = edge.wire?.lengthM !== undefined && edge.wire.lengthM > MAX_FUSE_DISTANCE_M;
+
+      if (isFromSource && (!isToFuse || isLongWire)) {
         this.unprotectedEdges.add(edge.id);
         this._diagnostics.push({
           severity: "warning",
           code: "UNPROTECTED_WIRE",
-          message: "Unprotected wire detected; consider adding a fuse.",
+          message: "Unprotected wire detected, which may pose a fire risk. Consider adding a fuse or moving the existing fuse closer to the power source (<30cm).",
           refs: [{ edgeId: edge.id }]
         });
       }
