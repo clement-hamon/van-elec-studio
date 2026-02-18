@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { computeCableDerived, estimateAmpacityForAwg } from '~/services/cable'
 import { computeFlow } from '~/services/flow-engine'
+import { resolveVoltageForDomain } from '~/services/flow/voltage-domain'
 import { componentRegistry } from '~/src/domain/components/registry'
 import { getHistoryDepth, loadSchema, saveSchema, undoSchema } from '~/services/storage'
 import type { FlowOutput, ScenarioInput, Port,
@@ -67,23 +68,6 @@ const normalizeSchema = (schema: SchemaState): SchemaState => {
     scenario: schema.scenario ?? defaultScenario(),
     updatedAt: schema.updatedAt ?? nowIso(),
   }
-}
-
-const parseVoltageFromDomain = (domain?: string) => {
-  if (!domain) return 12
-  const match = domain.match(/(\d+(?:\.\d+)?)V$/i)
-  if (match) return Number(match[1])
-  const lower = domain.toLowerCase()
-  if (lower.includes('ac')) return 230
-  if (lower.includes('dc')) return 12
-  return 12
-}
-
-const resolveVoltageForDomain = (domain: string | undefined, scenario: ScenarioInput) => {
-  if (!domain) return 12
-  const scenarioVoltage = scenario.domainVoltage?.[domain]
-  if (typeof scenarioVoltage === 'number' && scenarioVoltage > 0) return scenarioVoltage
-  return parseVoltageFromDomain(domain)
 }
 
 const buildPortIndex = (components: ComponentInstance[]) => {

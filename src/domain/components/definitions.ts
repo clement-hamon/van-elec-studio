@@ -7,6 +7,34 @@ export const fieldVoltage: ComponentFieldDefinition = {
   step: 0.1,
 }
 
+export const fieldOperationalVoltage: ComponentFieldDefinition = {
+  key: 'operationalV',
+  label: 'Operational Voltage (V)',
+  type: 'number',
+  step: 0.1,
+}
+
+export const fieldMaxVoltage: ComponentFieldDefinition = {
+  key: 'maxVoltageV',
+  label: 'Max Voltage (V)',
+  type: 'number',
+  step: 0.1,
+}
+
+export const fieldMaxInputVoltage: ComponentFieldDefinition = {
+  key: 'maxInputV',
+  label: 'Max Input Voltage (V)',
+  type: 'number',
+  step: 0.1,
+}
+
+export const fieldOutputVoltage: ComponentFieldDefinition = {
+  key: 'outputV',
+  label: 'Output Voltage (V)',
+  type: 'number',
+  step: 0.1,
+}
+
 export const fieldCapacityAh: ComponentFieldDefinition = {
   key: 'capacityAh',
   label: 'Capacity (Ah)',

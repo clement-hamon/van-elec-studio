@@ -1,10 +1,12 @@
-import type { Diagnostic, EdgeFlow } from "~/types/schema";
+import type { Diagnostic, EdgeFlow } from "../../types/schema";
+import { DEFAULT_DOMAIN_VOLTAGE } from "../flow/voltage-domain";
 import type { GraphEdge } from "../spanning-tree";
 import type { TreeVisitor } from "./tree-visitor";
 
 // ── Local types ────────────────────────────────────────────
 
 export interface WiredEdge extends GraphEdge {
+  voltageV?: number;
   wire?: { maxA?: number };
 }
 
@@ -12,7 +14,7 @@ export interface WiredEdge extends GraphEdge {
 
 /**
  * Preorder visitor: assigns signed current to each tree edge
- * based on the subtree sums computed by FuseCheckVisitor.
+ * based on the subtree power sums computed by FuseCheckVisitor.
  *
  * Must run AFTER FuseCheckVisitor.
  *
@@ -28,7 +30,7 @@ export class EdgeCurrentVisitor<E extends WiredEdge> implements TreeVisitor<E> {
   readonly edgeFlows: Record<string, EdgeFlow> = {};
 
   constructor(
-    private readonly subtreeA: Map<string, number>,
+    private readonly subtreeW: Map<string, number>,
     private readonly blockedNodes: Set<string>,
     private readonly blownEdges: Set<string>
   ) {}
@@ -48,7 +50,13 @@ export class EdgeCurrentVisitor<E extends WiredEdge> implements TreeVisitor<E> {
       return;
     }
 
-    const flowA = this.subtreeA.get(nodeId) ?? 0;
+    const flowW = this.subtreeW.get(nodeId) ?? 0;
+    const edgeVoltageV =
+      parentEdge.voltageV && parentEdge.voltageV > 0 ? parentEdge.voltageV : DEFAULT_DOMAIN_VOLTAGE;
+    // Current is derived per edge from power and local voltage.
+    // This is what makes one converter path yield different currents
+    // on low-voltage and high-voltage sides while preserving power flow.
+    const flowA = flowW / edgeVoltageV;
     let signedA: number;
 
     if (parentEdge.from === parentId && parentEdge.to === nodeId) {

@@ -1,4 +1,4 @@
-import type { Diagnostic } from "~/types/schema";
+import type { Diagnostic } from "../../types/schema";
 import { walkTree, type GraphEdge, type SpanningTree } from "../spanning-tree";
 
 /**

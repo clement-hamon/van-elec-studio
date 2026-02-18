@@ -1,4 +1,5 @@
-import type { Diagnostic, NodeFlow, ScenarioInput, NodeType  } from "~/types/schema";
+import type { Diagnostic, NodeFlow, ScenarioInput, NodeType } from "../../types/schema";
+import { policyForNode } from "../flow/node-policies";
 import type { GraphEdge, SpanningTree } from "../spanning-tree";
 import type { TreeVisitor } from "./tree-visitor";
 
@@ -7,29 +8,19 @@ import type { TreeVisitor } from "./tree-visitor";
 export interface DomainNode {
   id: string;
   type: NodeType;
+  typeId?: string;
+  primaryDomain?: string;
   params?: Record<string, unknown>;
 }
 
 const numberParam = (params: Record<string, unknown> | undefined, key: string) => {
-  const v = params?.[key];
-  return typeof v === "number" && Number.isFinite(v) ? v : undefined;
+  const value = params?.[key];
+  return typeof value === "number" && Number.isFinite(value) ? value : undefined;
 };
 
-const loadDemandW = (node: DomainNode, V: number) => {
-  const watts = numberParam(node.params, "watts");
-  const amps = numberParam(node.params, "amps");
-  const duty = numberParam(node.params, "dutyCycle") ?? 1;
-  const baseW = typeof watts === "number" ? watts : typeof amps === "number" ? amps * V : 0;
-  return Math.max(0, baseW) * Math.max(0, duty);
-};
-
-const sourceCapW = (node: DomainNode, V: number) => {
-  const availableW = numberParam(node.params, "availableW");
-  const maxOutA = numberParam(node.params, "maxOutA");
-  if (typeof availableW === "number") return Math.max(0, availableW);
-  if (typeof maxOutA === "number") return Math.max(0, maxOutA) * V;
-  return 0;
-};
+export interface PowerEdge extends GraphEdge {
+  voltageV?: number;
+}
 
 // ── Visitor ────────────────────────────────────────────────
 
@@ -37,10 +28,10 @@ const sourceCapW = (node: DomainNode, V: number) => {
  * Postorder visitor: gathers per-node demand/supply data during the walk,
  * then solves the global power balance when the root is reached.
  *
- * After the walk, exposes: nodeFlows, injectionsA, totalDemandW,
+ * After the walk, exposes: nodeFlows, injectionsW, totalDemandW,
  * totalSupplyW, hasUnserved.
  */
-export class PowerBalanceVisitor<E extends GraphEdge> implements TreeVisitor<E> {
+export class PowerBalanceVisitor<E extends PowerEdge> implements TreeVisitor<E> {
   readonly name = "power-balance";
   readonly order = "postorder" as const;
 
@@ -49,7 +40,14 @@ export class PowerBalanceVisitor<E extends GraphEdge> implements TreeVisitor<E> 
 
   /** Results — available after the walk */
   readonly nodeFlows: Record<string, NodeFlow> = {};
-  readonly injectionsA = new Map<string, number>();
+  /**
+   * Node injection in watts (+ consumes, - supplies).
+   *
+   * We intentionally propagate power instead of current because converters
+   * change current when voltage changes (I = P / V), while power remains
+   * comparable across voltage domains after efficiency is applied.
+   */
+  readonly injectionsW = new Map<string, number>();
   totalDemandW = 0;
   totalSupplyW = 0;
   hasUnserved = false;
@@ -62,7 +60,7 @@ export class PowerBalanceVisitor<E extends GraphEdge> implements TreeVisitor<E> 
   constructor(
     private readonly nodes: DomainNode[],
     private readonly battery: DomainNode,
-    private readonly V: number,
+    private readonly batteryVoltageV: number,
     private readonly scenario: ScenarioInput
   ) {}
 
@@ -70,12 +68,17 @@ export class PowerBalanceVisitor<E extends GraphEdge> implements TreeVisitor<E> 
     this.tree = tree;
   }
 
-  visit(nodeId: string): void {
+  visit(nodeId: string, _parentId: string | null, parentEdge: E | null): void {
     const node = this.nodes.find((n) => n.id === nodeId);
     if (!node) return;
 
+    const policy = policyForNode(node);
+    const nodeVoltage = parentEdge?.voltageV && parentEdge.voltageV > 0
+      ? parentEdge.voltageV
+      : this.batteryVoltageV;
+
     if (node.type === "load") {
-      const demandW = loadDemandW(node, this.V);
+      const demandW = policy.demandW(node, nodeVoltage);
       this.demandByNode.set(node.id, demandW);
       this.totalDemandW += demandW;
       if (this.tree.parent.has(node.id)) this.connectedDemandW += demandW;
@@ -83,7 +86,7 @@ export class PowerBalanceVisitor<E extends GraphEdge> implements TreeVisitor<E> 
     }
 
     if (node.type === "source" && this.tree.parent.has(node.id)) {
-      this.supplyCapByNode.set(node.id, sourceCapW(node, this.V));
+      this.supplyCapByNode.set(node.id, policy.supplyCapW(node, nodeVoltage));
     }
 
     // Solve when we reach the root (last node in postorder)
@@ -94,13 +97,13 @@ export class PowerBalanceVisitor<E extends GraphEdge> implements TreeVisitor<E> 
   }
 
   private solve() {
-    const V = this.V;
+    const batteryVoltageV = this.batteryVoltageV;
     const battery = this.battery;
 
     const maxDischargeA = numberParam(battery.params, "maxDischargeA") ?? Number.POSITIVE_INFINITY;
     const maxChargeA = numberParam(battery.params, "maxChargeA") ?? maxDischargeA;
-    const maxDischargeW = maxDischargeA * V;
-    const maxChargeW = maxChargeA * V;
+    const maxDischargeW = maxDischargeA * batteryVoltageV;
+    const maxChargeW = maxChargeA * batteryVoltageV;
 
     const totalSupplyCapW =
       Array.from(this.supplyCapByNode.values()).reduce((a, b) => a + b, 0) + maxDischargeW;
@@ -121,7 +124,8 @@ export class PowerBalanceVisitor<E extends GraphEdge> implements TreeVisitor<E> 
       if (node.type !== "load") continue;
       const demandW = this.demandByNode.get(node.id) ?? 0;
       const servedW = this.tree.parent.has(node.id) ? demandW * servedFactor : 0;
-      this.injectionsA.set(node.id, V > 0 ? servedW / V : 0);
+      // Positive injection means "this node consumes this many watts".
+      this.injectionsW.set(node.id, servedW);
       if (servedFactor < 1 && servedW < demandW) {
         this.nodeFlows[node.id] = { ...this.nodeFlows[node.id], clampedBy: ["supply.shortage"] };
       }
@@ -145,21 +149,22 @@ export class PowerBalanceVisitor<E extends GraphEdge> implements TreeVisitor<E> 
         const use = totalCap > 0 ? Math.min(cap, (cap / totalCap) * supplyBudgetW) : 0;
         usedSupplyW += use;
         this.nodeFlows[id] = { supplyW: use };
-        this.injectionsA.set(id, V > 0 ? -use / V : 0);
+        // Negative injection means "this node provides this many watts".
+        this.injectionsW.set(id, -use);
       }
     } else {
       let remaining = supplyBudgetW;
       for (const [id, cap] of sources) {
         if (remaining <= 1e-6) {
           this.nodeFlows[id] = { supplyW: 0 };
-          this.injectionsA.set(id, 0);
+          this.injectionsW.set(id, 0);
           continue;
         }
         const use = Math.min(cap, remaining);
         remaining -= use;
         usedSupplyW += use;
         this.nodeFlows[id] = { supplyW: use };
-        this.injectionsA.set(id, V > 0 ? -use / V : 0);
+        this.injectionsW.set(id, -use);
       }
     }
 
@@ -170,7 +175,7 @@ export class PowerBalanceVisitor<E extends GraphEdge> implements TreeVisitor<E> 
 
     if (netFromSourcesW >= 0) {
       const chargeW = Math.min(netFromSourcesW, maxChargeW);
-      batteryNetA = V > 0 ? chargeW / V : 0;
+      batteryNetA = batteryVoltageV > 0 ? chargeW / batteryVoltageV : 0;
       if (netFromSourcesW - chargeW > 1e-6) {
         this._diagnostics.push({
           severity: "warning",
@@ -181,7 +186,7 @@ export class PowerBalanceVisitor<E extends GraphEdge> implements TreeVisitor<E> 
       }
     } else {
       const dischargeW = Math.min(-netFromSourcesW, maxDischargeW);
-      batteryNetA = V > 0 ? -dischargeW / V : 0;
+      batteryNetA = batteryVoltageV > 0 ? -dischargeW / batteryVoltageV : 0;
       if (servedFactor === 1 && -netFromSourcesW - dischargeW > 1e-6) {
         this._diagnostics.push({
           severity: "warning",
@@ -197,9 +202,11 @@ export class PowerBalanceVisitor<E extends GraphEdge> implements TreeVisitor<E> 
       state: batteryNetA > 1e-6 ? "charging" : batteryNetA < -1e-6 ? "discharging" : "idle",
       ...batteryFlow
     };
+    // Keep battery represented in the same power-sign convention.
+    this.injectionsW.set(battery.id, -batteryNetA * batteryVoltageV);
 
     this.hasUnserved = servedFactor < 1;
-    this.totalSupplyW = usedSupplyW + Math.max(0, -batteryNetA * V);
+    this.totalSupplyW = usedSupplyW + Math.max(0, -batteryNetA * batteryVoltageV);
   }
 
   diagnostics() {
