@@ -17,21 +17,38 @@ const getAssetPath = (path: string, baseURL: string) => {
   return baseURL.endsWith('/') ? `${baseURL}${path.slice(1)}` : `${baseURL}${path}`
 }
 
-const nodeImageSize = {
+const baseNodeImageSize = {
   width: Math.round(64 * NODE_SCALE),
   height: Math.round(64 * NODE_SCALE),
 }
-const nodeImageOffset = {
-  x: Math.round((NODE_WIDTH - nodeImageSize.width) / 2),
-  y: Math.round(6 * NODE_SCALE),
-}
-const nodeTitleY = nodeImageOffset.y + nodeImageSize.height + 2
+const baseNodeImageOffsetY = Math.round(6 * NODE_SCALE)
 const nodeTitleFontSize = Math.round(13 * NODE_SCALE)
-const nodeHaloRadius = nodeImageSize.width / 2 + Math.round(10 * NODE_SCALE)
-const nodeFlowY = nodeTitleY + Math.round(16 * NODE_SCALE)
+const nodeFlowOffsetY = Math.round(16 * NODE_SCALE)
 const nodeFlowFontSize = Math.round(11 * NODE_SCALE)
 
 const nodeImageCache = new Map<string, HTMLImageElement>()
+
+const getNodeMetrics = (component: ComponentInstance) => {
+  const imageScaleRatio = component.imageScaleRatio ?? 1
+  const imageWidth = Math.round(baseNodeImageSize.width * imageScaleRatio)
+  const imageHeight = Math.round(baseNodeImageSize.height * imageScaleRatio)
+  const imageOffset = {
+    x: Math.round((NODE_WIDTH - imageWidth) / 2),
+    y: baseNodeImageOffsetY,
+  }
+  const titleY = imageOffset.y + imageHeight + 2
+  const flowY = titleY + nodeFlowOffsetY
+  const haloRadius = imageWidth / 2 + Math.round(10 * NODE_SCALE)
+
+  return {
+    imageWidth,
+    imageHeight,
+    imageOffset,
+    titleY,
+    flowY,
+    haloRadius,
+  }
+}
 
 const iconUrlForComponent = (component: ComponentInstance, baseURL: string) => {
   const getPath = (path: string) => getAssetPath(path, baseURL)
@@ -43,9 +60,12 @@ const iconUrlForComponent = (component: ComponentInstance, baseURL: string) => {
   if (component.typeId === 'shore-inlet') return getPath('/icons/shore-inlet.svg')
   if (component.typeId === 'solar-panel') return getPath('/icons/solar-panel.svg')
   if (component.typeId === 'fuse') return getPath('/icons/fuse.svg')
+  if (component.typeId === 'switch') return getPath('/icons/switch.svg')
   if (component.typeId === 'ac-dc-charger') return getPath('/icons/ac-dc-charger.svg')
   if (component.typeId === 'led-light') return getPath('/icons/led-light.svg')
   if (component.typeId === 'light-bar') return getPath('/icons/led-bar.svg')
+  if (component.typeId === 'fridge-12v') return getPath('/icons/fridge.svg')
+  if (component.typeId === 'tv') return getPath('/icons/tv.svg')
 
   return getPath('/icons/mppt.svg')
 }
@@ -87,6 +107,8 @@ export const useCanvasNodes = ({
     const existing = nodeMap.get(componentId)
     if (existing) return existing
 
+    const metrics = getNodeMetrics(component)
+
     const componentGroup = new Konva.Group({
       draggable: true,
       id: componentId,
@@ -104,8 +126,8 @@ export const useCanvasNodes = ({
 
     const error_halo = new Konva.Circle({
       x: NODE_WIDTH / 2,
-      y: nodeImageOffset.y + nodeImageSize.height / 2,
-      radius: nodeHaloRadius,
+      y: metrics.imageOffset.y + metrics.imageHeight / 2,
+      radius: metrics.haloRadius,
       fill: '#d96b3a',
       opacity: 0.22,
       visible: false,
@@ -115,8 +137,8 @@ export const useCanvasNodes = ({
 
     const selection_halo = new Konva.Circle({
       x: NODE_WIDTH / 2,
-      y: nodeImageOffset.y + nodeImageSize.height / 2,
-      radius: nodeHaloRadius,
+      y: metrics.imageOffset.y + metrics.imageHeight / 2,
+      radius: metrics.haloRadius,
       stroke: '#3a84d9',
       strokeWidth: 2,
       opacity: 0,
@@ -127,7 +149,7 @@ export const useCanvasNodes = ({
 
     const title = new Konva.Text({
       x: 0,
-      y: nodeTitleY,
+      y: metrics.titleY,
       width: NODE_WIDTH,
       align: 'center',
       text: componentId,
@@ -139,7 +161,7 @@ export const useCanvasNodes = ({
 
     const flowText = new Konva.Text({
       x: 0,
-      y: nodeFlowY,
+      y: metrics.flowY,
       width: NODE_WIDTH,
       align: 'center',
       text: '',
@@ -155,10 +177,10 @@ export const useCanvasNodes = ({
 
     const imageElement = ensureNodeImage(layer, iconUrl)
     const image = new Konva.Image({
-      x: nodeImageOffset.x,
-      y: nodeImageOffset.y,
-      width: nodeImageSize.width,
-      height: nodeImageSize.height,
+      x: metrics.imageOffset.x,
+      y: metrics.imageOffset.y,
+      width: metrics.imageWidth,
+      height: metrics.imageHeight,
       image: imageElement ?? undefined,
       listening: false,
       name: 'node-image',
@@ -276,14 +298,34 @@ export const useCanvasNodes = ({
   const syncNodes = (components: ComponentInstance[]) => {
     components.forEach((component) => {
       const node = ensureNode(component)
+      const metrics = getNodeMetrics(component)
       node.position({ x: component.position.x, y: component.position.y })
       const title = node.findOne<Konva.Text>('.node-title')
-      if (title) title.text(component.name || component.id)
+      if (title) {
+        title.text(component.name || component.id)
+        title.y(metrics.titleY)
+      }
+      const flowText = node.findOne<Konva.Text>('.node-flow')
+      if (flowText) flowText.y(metrics.flowY)
+      const errorHalo = node.findOne<Konva.Circle>('.error_halo')
+      if (errorHalo) {
+        errorHalo.y(metrics.imageOffset.y + metrics.imageHeight / 2)
+        errorHalo.radius(metrics.haloRadius)
+      }
+      const selectionHalo = node.findOne<Konva.Circle>('.selection_halo')
+      if (selectionHalo) {
+        selectionHalo.y(metrics.imageOffset.y + metrics.imageHeight / 2)
+        selectionHalo.radius(metrics.haloRadius)
+      }
       node.opacity(schemaStore.isComponentEnabled(component.id) ? 1 : 0.45)
+      const image = node.findOne<Konva.Image>('.node-image')
+      if (image) {
+        image.position(metrics.imageOffset)
+        image.size({ width: metrics.imageWidth, height: metrics.imageHeight })
+      }
       const nextIconUrl = iconUrlForComponent(component, baseURL)
       const currentIconUrl = node.getAttr('iconUrl')
       if (currentIconUrl !== nextIconUrl) {
-        const image = node.findOne<Konva.Image>('.node-image')
         if (image) {
           image.image(ensureNodeImage(layer, nextIconUrl) ?? undefined)
         }

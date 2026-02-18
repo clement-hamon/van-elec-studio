@@ -1,0 +1,34 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 320" width="256" height="320" role="img" aria-label="Fridge icon">
+
+  <!-- Shadow -->
+  <rect x="56" y="24" width="144" height="272" rx="14" fill="#000" opacity="0.08"></rect>
+
+  <!-- Outer body -->
+  <rect x="52" y="20" width="152" height="272" rx="14" fill="#C9CED4"></rect>
+
+  <!-- Dark top control fascia -->
+  <rect x="60" y="28" width="136" height="64" rx="10" fill="#1E2328"></rect>
+
+  <!-- Handle recess frame -->
+  <rect x="88" y="40" width="80" height="36" rx="6" fill="#D8DDE2"></rect>
+  <rect x="92" y="44" width="72" height="20" rx="4" fill="#000" opacity="0.25"></rect>
+
+  <!-- Abstract brand block (top right like reference) -->
+  <rect x="160" y="36" width="28" height="6" rx="3" fill="#FFF" opacity="0.35"></rect>
+
+  <!-- Main silver door panel -->
+  <rect x="60" y="96" width="136" height="188" rx="10" fill="#E6EAEE"></rect>
+
+  <!-- Subtle metallic gradient hint -->
+  <rect x="70" y="106" width="116" height="168" rx="8" fill="#FFF" opacity="0.12"></rect>
+
+  <!-- Door frame border -->
+  <rect x="60" y="96" width="136" height="188" rx="10" fill="none" stroke="#B0B6BC" stroke-width="2"></rect>
+
+  <!-- Bottom feet -->
+  <g fill="#9AA0A6">
+    <rect x="76" y="290" width="18" height="8" rx="4"></rect>
+    <rect x="162" y="290" width="18" height="8" rx="4"></rect>
+  </g>
+
+</svg>

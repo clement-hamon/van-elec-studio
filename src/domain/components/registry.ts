@@ -50,6 +50,19 @@ export const componentRegistry: ComponentType[] = [
     ],
   },
   {
+    id: 'switch',
+    label: 'Switch',
+    description:
+      'Manual DC circuit switch for isolating or controlling a branch. Place on a protected line and size by expected branch current.',
+    type: 'distribution',
+    defaultParams: { ratingA: 20 },
+    fields: [fieldRatingA],
+    ports: [
+      { id: 'in', label: 'In', direction: 'in', domain: 'dc', conductor: 'POS' },
+      { id: 'out', label: 'Out', direction: 'out', domain: 'dc', conductor: 'POS' },
+    ],
+  },
+  {
     id: 'inverter',
     label: 'Inverter',
     description:
@@ -80,6 +93,26 @@ export const componentRegistry: ComponentType[] = [
     type: 'load',
     defaultParams: { watts: 36, dutyCycle: 1, lumens: 3000 },
     fields: [fieldWatt, fieldDutyCycle, fieldLumens],
+    ports: [{ id: 'dc-in', label: 'DC In', direction: 'in', domain: 'dc', conductor: 'POS' }],
+  },
+  {
+    id: 'fridge-12v',
+    label: '12V Fridge',
+    description:
+      '12V refrigeration load for food storage. Run on a protected DC branch and size wiring for continuous operation duty cycles.',
+    type: 'load',
+    defaultParams: { watts: 50, dutyCycle: 1 },
+    fields: [fieldWatt, fieldDutyCycle],
+    ports: [{ id: 'dc-in', label: 'DC In', direction: 'in', domain: 'dc', conductor: 'POS' }],
+  },
+  {
+    id: 'tv',
+    label: 'TV',
+    description:
+      'Entertainment display load. Connect on a protected DC branch and size wiring for expected viewing duty cycle.',
+    type: 'load',
+    defaultParams: { watts: 60, dutyCycle: 1 },
+    fields: [fieldWatt, fieldDutyCycle],
     ports: [{ id: 'dc-in', label: 'DC In', direction: 'in', domain: 'dc', conductor: 'POS' }],
   },
   {

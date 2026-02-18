@@ -1,0 +1,79 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 240" width="320" height="240" role="img" aria-label="Super Nintendo console icon">
+
+  <!-- Shadow -->
+  <rect x="72" y="66" width="176" height="112" rx="18" fill="#000" opacity="0.08"></rect>
+
+  <!-- Console body -->
+  <rect x="68" y="62" width="184" height="112" rx="18" fill="#E6EAEE"></rect>
+  <rect x="78" y="72" width="164" height="92" rx="14" fill="#D8DDE2"></rect>
+
+  <!-- Dark cartridge panel -->
+  <rect x="98" y="78" width="124" height="52" rx="10" fill="#BFC4CA"></rect>
+
+  <!-- Cartridge slot -->
+  <rect x="118" y="94" width="84" height="12" rx="6" fill="#2A2E33" opacity="0.35"></rect>
+
+  <!-- Power / Eject / Reset buttons -->
+  <g fill="#C9CED4">
+    <rect x="108" y="112" width="24" height="14" rx="4"></rect>
+    <rect x="144" y="112" width="32" height="14" rx="4"></rect>
+    <rect x="186" y="112" width="24" height="14" rx="4"></rect>
+  </g>
+
+  <!-- Colored SNES logo dots (abstract) -->
+  <g opacity="0.95">
+    <circle cx="214" cy="84" r="4" fill="#EB5757"></circle>
+    <circle cx="222" cy="78" r="4" fill="#F2C94C"></circle>
+    <circle cx="230" cy="84" r="4" fill="#27AE60"></circle>
+    <circle cx="222" cy="90" r="4" fill="#2F86C8"></circle>
+  </g>
+
+  <!-- Front controller ports -->
+  <g>
+    <rect x="118" y="150" width="40" height="14" rx="6" fill="#B0B6BC"></rect>
+    <rect x="162" y="150" width="40" height="14" rx="6" fill="#B0B6BC"></rect>
+    <rect x="124" y="154" width="28" height="6" rx="3" fill="#000" opacity="0.15"></rect>
+    <rect x="168" y="154" width="28" height="6" rx="3" fill="#000" opacity="0.15"></rect>
+  </g>
+
+  <!-- LEFT CONTROLLER -->
+  <g transform="translate(10,150)">
+    <ellipse cx="70" cy="40" rx="64" ry="28" fill="#E6EAEE"></ellipse>
+    <ellipse cx="70" cy="40" rx="56" ry="22" fill="#D8DDE2"></ellipse>
+
+    <!-- D-pad -->
+    <rect x="36" y="34" width="24" height="8" rx="4" fill="#2A2E33"></rect>
+    <rect x="44" y="26" width="8" height="24" rx="4" fill="#2A2E33"></rect>
+
+    <!-- Start/Select -->
+    <rect x="74" y="38" width="18" height="6" rx="3" fill="#2A2E33" opacity="0.3"></rect>
+    <rect x="98" y="38" width="18" height="6" rx="3" fill="#2A2E33" opacity="0.3"></rect>
+
+    <!-- Colored buttons -->
+    <circle cx="122" cy="32" r="6" fill="#2F86C8"></circle>
+    <circle cx="134" cy="38" r="6" fill="#27AE60"></circle>
+    <circle cx="122" cy="44" r="6" fill="#F2C94C"></circle>
+    <circle cx="110" cy="38" r="6" fill="#EB5757"></circle>
+  </g>
+
+  <!-- RIGHT CONTROLLER -->
+  <g transform="translate(190,150)">
+    <ellipse cx="70" cy="40" rx="64" ry="28" fill="#E6EAEE"></ellipse>
+    <ellipse cx="70" cy="40" rx="56" ry="22" fill="#D8DDE2"></ellipse>
+
+    <!-- D-pad -->
+    <rect x="36" y="34" width="24" height="8" rx="4" fill="#2A2E33"></rect>
+    <rect x="44" y="26" width="8" height="24" rx="4" fill="#2A2E33"></rect>
+
+    <!-- Start/Select -->
+    <rect x="74" y="38" width="18" height="6" rx="3" fill="#2A2E33" opacity="0.3"></rect>
+    <rect x="98" y="38" width="18" height="6" rx="3" fill="#2A2E33" opacity="0.3"></rect>
+
+    <!-- Colored buttons -->
+    <circle cx="122" cy="32" r="6" fill="#2F86C8"></circle>
+    <circle cx="134" cy="38" r="6" fill="#27AE60"></circle>
+    <circle cx="122" cy="44" r="6" fill="#F2C94C"></circle>
+    <circle cx="110" cy="38" r="6" fill="#EB5757"></circle>
+  </g>
+
+</svg>

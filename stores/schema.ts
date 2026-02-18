@@ -52,9 +52,18 @@ const ensureWireAmpacity = (wire: CableWire): CableWire => {
   return wire
 }
 
+const defaultImageScaleRatio = (typeId: string) => (typeId === 'fuse' ? 0.7 : 1)
+
 const normalizeSchema = (schema: SchemaState): SchemaState => {
   return {
     ...schema,
+    components: schema.components.map((component) => ({
+      ...component,
+      imageScaleRatio:
+        typeof component.imageScaleRatio === 'number'
+          ? component.imageScaleRatio
+          : defaultImageScaleRatio(component.typeId),
+    })),
     scenario: schema.scenario ?? defaultScenario(),
     updatedAt: schema.updatedAt ?? nowIso(),
   }
@@ -149,6 +158,7 @@ const defaultSchema = (registry: ComponentType[]): SchemaState => {
     type: batteryType?.type ?? 'battery',
     name: 'Main Battery',
     position: { x: 140, y: 140 },
+    imageScaleRatio: defaultImageScaleRatio('battery'),
     params: { ...(batteryType?.defaultParams ?? {}) },
     ports: buildPortsFromType(batteryType),
   }
@@ -159,6 +169,7 @@ const defaultSchema = (registry: ComponentType[]): SchemaState => {
     type: fuseType?.type ?? 'distribution',
     name: 'Main Fuse',
     position: { x: 360, y: 140 },
+    imageScaleRatio: defaultImageScaleRatio('fuse'),
     params: { ...(fuseType?.defaultParams ?? {}) },
     ports: buildPortsFromType(fuseType),
   }
@@ -261,6 +272,7 @@ export const useSchemaStore = defineStore('schema', {
         type: type.type,
         name: `${type.label} ${sameTypeCount + 1}`,
         position: position ?? { x: 160 + sameTypeCount * 40, y: 220 + sameTypeCount * 30 },
+        imageScaleRatio: defaultImageScaleRatio(typeId),
         params: { ...type.defaultParams },
         ports: buildPortsFromType(type),
       })
@@ -319,7 +331,13 @@ export const useSchemaStore = defineStore('schema', {
       this.schema.selection = payload
     },
     addComponent(instance: ComponentInstance) {
-      this.schema.components.push(instance)
+      this.schema.components.push({
+        ...instance,
+        imageScaleRatio:
+          typeof instance.imageScaleRatio === 'number'
+            ? instance.imageScaleRatio
+            : defaultImageScaleRatio(instance.typeId),
+      })
       this.schema.updatedAt = nowIso()
       this.refreshValidation()
     },

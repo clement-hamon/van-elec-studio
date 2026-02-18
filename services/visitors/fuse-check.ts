@@ -70,7 +70,7 @@ export class FuseCheckVisitor<E extends FuseEdge> implements TreeVisitor<E> {
     }
   }
 
-  visit(nodeId: string, _parentId: string | null, edge: E | null, children: string[]): void {
+  visit(nodeId: string, _parentId: string | null, parentEdge: E | null, children: string[]): void {
     let sum = this.subtreeA.get(nodeId) ?? 0;
     const members = this.subtreeMembers.get(nodeId) ?? new Set([nodeId]);
 
@@ -84,37 +84,37 @@ export class FuseCheckVisitor<E extends FuseEdge> implements TreeVisitor<E> {
     // Check fuse
     const node = this.nodes.find((n) => n.id === nodeId);
     const nodeFuseA = numberParam(node?.params, "ratingA");
-    const edgeFuseA = edge?.fuseA;
+    const edgeFuseA = parentEdge?.fuseA;
     const fuseA = edgeFuseA ?? nodeFuseA;
 
-    if (edge && fuseA && Math.abs(sum) > fuseA + 1e-6) {
-      this.blownEdges.add(edge.id);
+    if (parentEdge && fuseA && Math.abs(sum) > fuseA + 1e-6) {
+      this.blownEdges.add(parentEdge.id);
       members.forEach((id) => this.blockedNodes.add(id));
       this._diagnostics.push({
         severity: "warning",
         code: "FUSE_OPEN",
         message: "Fuse opened due to overcurrent; downstream loads are unserved.",
-        refs: [{ edgeId: edge.id }]
+        refs: [{ edgeId: parentEdge.id }]
       });
       sum = 0;
     }
 
     // Warn about unprotected wires: if the edge is connected to a battery or source and doesn't have a fuse on it or connected node, flag it as unprotected
-    if (edge) {
-      const fromNode = this.nodes.find((n) => n.id === edge.from);
-      const toNode = this.nodes.find((n) => n.id === edge.to);
+    if (parentEdge) {
+      const fromNode = this.nodes.find((n) => n.id === parentEdge.from);
+      const toNode = this.nodes.find((n) => n.id === parentEdge.to);
 
       const isFromSource = isSourceNode(fromNode);
       const isToFuse = isFuse(toNode);
-      const isLongWire = edge.wire?.lengthM !== undefined && edge.wire.lengthM > MAX_FUSE_DISTANCE_M;
+      const isLongWire = parentEdge.wire?.lengthM !== undefined && parentEdge.wire.lengthM > MAX_FUSE_DISTANCE_M;
 
       if (isFromSource && (!isToFuse || isLongWire)) {
-        this.unprotectedEdges.add(edge.id);
+        this.unprotectedEdges.add(parentEdge.id);
         this._diagnostics.push({
           severity: "warning",
           code: "UNPROTECTED_WIRE",
           message: "Unprotected wire detected, which may pose a fire risk. Consider adding a fuse or moving the existing fuse closer to the power source (<30cm).",
-          refs: [{ edgeId: edge.id }]
+          refs: [{ edgeId: parentEdge.id }]
         });
       }
     }

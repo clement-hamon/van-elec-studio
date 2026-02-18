@@ -23,7 +23,7 @@ export interface TreeVisitor<E extends GraphEdge = GraphEdge> {
   visit(
     nodeId: string,
     parentId: string | null,
-    edge: E | null,
+    parentEdge: E | null,
     children: string[]
   ): void;
 
@@ -40,8 +40,8 @@ export function runVisitors<E extends GraphEdge>(
 
   for (const visitor of visitors) {
     visitor.prepare?.(tree);
-    walkTree(tree, visitor.order, (nodeId: string, parentId: string | null, edge: E | null, children: string[]) =>
-      visitor.visit(nodeId, parentId, edge, children)
+    walkTree(tree, visitor.order, (nodeId: string, parentId: string | null, parentEdge: E | null, children: string[]) =>
+      visitor.visit(nodeId, parentId, parentEdge, children)
     );
     allDiagnostics.push(...visitor.diagnostics());
   }

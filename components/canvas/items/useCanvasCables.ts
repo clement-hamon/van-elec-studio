@@ -15,12 +15,12 @@ const CABLE_POINTER_LENGTH = 10
 const CABLE_POINTER_WIDTH = 8
 const CABLE_CORNER_RADIUS = 16
 const CABLE_WIDTH_SCALE = 0.7 // Adjust this to make all cables thicker (>1.0) or thinner (<1.0)
-const CABLE_GAUGE_HINT_FONT_SIZE = 14
-const CABLE_GAUGE_HINT_COLOR = '#e64141ff'
-const CABLE_GAUGE_HINT_BG = '#F9F7F2'
-const CABLE_GAUGE_HINT_PADDING_X = 6
-const CABLE_GAUGE_HINT_PADDING_Y = 3
-const CABLE_GAUGE_HINT_RADIUS = 6
+// const CABLE_GAUGE_HINT_FONT_SIZE = 14
+// const CABLE_GAUGE_HINT_COLOR = '#e64141ff'
+// const CABLE_GAUGE_HINT_BG = '#F9F7F2'
+// const CABLE_GAUGE_HINT_PADDING_X = 6
+// const CABLE_GAUGE_HINT_PADDING_Y = 3
+// const CABLE_GAUGE_HINT_RADIUS = 6
 const CABLE_FLOW_FONT_SIZE = 12
 const CABLE_FLOW_COLOR = '#2d2a25'
 const CABLE_FLOW_BG = '#fffaf2'
@@ -148,42 +148,42 @@ export const useCanvasCables = ({ layer, schemaStore }: CanvasCablesOptions) => 
     return badge
   }
 
-  const ensureCableGaugeLabel = (cable: Cable) => {
-    const existing = cableGaugeMap.get(cable.id)
-    if (existing) return existing
+  // const ensureCableGaugeLabel = (cable: Cable) => {
+  //   const existing = cableGaugeMap.get(cable.id)
+  //   if (existing) return existing
 
-    const label = new Konva.Group({
-      listening: false,
-    })
+  //   const label = new Konva.Group({
+  //     listening: false,
+  //   })
 
-    const background = new Konva.Rect({
-      fill: CABLE_GAUGE_HINT_BG,
-      opacity: 0.9,
-      cornerRadius: CABLE_GAUGE_HINT_RADIUS,
-      listening: false,
-      name: 'cable-gauge-bg',
-    })
+  //   const background = new Konva.Rect({
+  //     fill: CABLE_GAUGE_HINT_BG,
+  //     opacity: 0.9,
+  //     cornerRadius: CABLE_GAUGE_HINT_RADIUS,
+  //     listening: false,
+  //     name: 'cable-gauge-bg',
+  //   })
 
-    const text = new Konva.Text({
-      text: `⌀${cable.wire.gaugeAwg ?? 0}`,
-      fontSize: CABLE_GAUGE_HINT_FONT_SIZE,
-      fontFamily: 'Space Grotesk, sans-serif',
-      fill: CABLE_GAUGE_HINT_COLOR,
-      stroke: CABLE_GAUGE_HINT_COLOR,
-      strokeWidth: 1,
-      opacity: 0.9,
-      listening: false,
-      name: 'cable-gauge-text',
-    })
+  //   const text = new Konva.Text({
+  //     text: `⌀${cable.wire.gaugeAwg ?? 0}`,
+  //     fontSize: CABLE_GAUGE_HINT_FONT_SIZE,
+  //     fontFamily: 'Space Grotesk, sans-serif',
+  //     fill: CABLE_GAUGE_HINT_COLOR,
+  //     stroke: CABLE_GAUGE_HINT_COLOR,
+  //     strokeWidth: 1,
+  //     opacity: 0.9,
+  //     listening: false,
+  //     name: 'cable-gauge-text',
+  //   })
 
-    label.add(background)
-    label.add(text)
+  //   label.add(background)
+  //   label.add(text)
 
-    cableGaugeMap.set(cable.id, label)
-    layer.add(label)
-    label.zIndex(2)
-    return label
-  }
+  //   cableGaugeMap.set(cable.id, label)
+  //   layer.add(label)
+  //   label.zIndex(2)
+  //   return label
+  // }
 
   const ensureCableFlowLabel = (cable: Cable) => {
     const existing = cableFlowMap.get(cable.id)
@@ -263,7 +263,7 @@ export const useCanvasCables = ({ layer, schemaStore }: CanvasCablesOptions) => 
       line.strokeWidth(getCableLineStrokeWidth(cable.wire.gaugeAwg ?? 0))
       line.zIndex(1)
       ensureCableBadge(cable.id)
-      ensureCableGaugeLabel(cable)
+      // ensureCableGaugeLabel(cable)
       ensureCableFlowLabel(cable)
     })
   }

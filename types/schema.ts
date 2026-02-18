@@ -42,6 +42,7 @@ export type ComponentInstance = BaseNode & {
   typeId: string
   name: string
   position: Position
+  imageScaleRatio: number
   params: Record<string, number | string | boolean>
   ports: (Port & { label?: string })[]
 }
