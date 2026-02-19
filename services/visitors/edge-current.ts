@@ -48,6 +48,9 @@ export class EdgeCurrentVisitor<E extends WiredEdge> implements TreeVisitor<E> {
     private readonly blockedNodes: Set<string>,
     private readonly blownEdges: Set<string>,
     private readonly currentComputationMode: CurrentComputationMode = "load_simulation"
+    ,
+    private readonly batteryId?: string,
+    private readonly batteryMaxChargeA: number = Number.POSITIVE_INFINITY,
   ) {}
 
   prepare() {}
@@ -109,12 +112,29 @@ export class EdgeCurrentVisitor<E extends WiredEdge> implements TreeVisitor<E> {
     const demandW = this.sizingDemandSubtreeW.get(nodeId) ?? Math.max(0, this.preProtectionSubtreeW.get(nodeId) ?? 0);
     const supplyW = this.sizingSupplySubtreeW.get(nodeId) ?? 0;
     const { flowParentToChildA, limitedBy } = resolveSizingFlow(demandW, supplyW, edgeVoltageV);
-    const signedA = this.resolveSignedCurrent(parentEdge, parentId, nodeId, flowParentToChildA);
+    let limitedFlowParentToChildA = flowParentToChildA;
+    const finalLimitedBy = [...limitedBy];
+
+    // Charging current into the battery chemistry is capped by battery maxChargeA.
+    // In tree coordinates, child -> parent charging is represented by a negative flow.
+    if (
+      this.batteryId &&
+      parentId === this.batteryId &&
+      limitedFlowParentToChildA < 0 &&
+      Number.isFinite(this.batteryMaxChargeA)
+    ) {
+      const chargeA = Math.abs(limitedFlowParentToChildA);
+      if (chargeA > this.batteryMaxChargeA + 1e-6) {
+        limitedFlowParentToChildA = -this.batteryMaxChargeA;
+        finalLimitedBy.push(CURRENT_LIMIT_REASONS.batteryMaxChargeA);
+      }
+    }
+    const signedA = this.resolveSignedCurrent(parentEdge, parentId, nodeId, limitedFlowParentToChildA);
     const maxA = parentEdge.wire?.maxA;
     return {
       currentA: signedA,
       utilization: resolveCurrentUtilization(signedA, maxA),
-      limitedBy: limitedBy.length ? limitedBy : undefined
+      limitedBy: finalLimitedBy.length ? finalLimitedBy : undefined
     };
   }
 

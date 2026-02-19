@@ -19,6 +19,7 @@ import type {
   NodeType, Conductor, Direction
 } from "../types/schema";
 import { nodeTypes } from "../types/schema";
+import { resolveBatteryMaxChargeCurrentA } from "./flow/current-calculation";
 import {
   DEFAULT_DOMAIN_VOLTAGE,
   isACDomain,
@@ -154,6 +155,8 @@ class FlowEngine {
       fuseCheck.blockedNodes,
       fuseCheck.blownEdges,
       this.scenario.currentComputationMode ?? "load_simulation",
+      battery.id,
+      resolveBatteryMaxChargeCurrentA(battery),
     );
     const voltageCompatibility = new VoltageCompatibilityVisitor<FlowEdge>(nodes);
 

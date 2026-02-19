@@ -61,6 +61,7 @@ export class PowerBalanceVisitor<E extends PowerEdge> implements TreeVisitor<E> 
   totalSupplyW = 0;
   hasUnserved = false;
 
+  private readonly nodeById = new Map<string, DomainNode>();
   private readonly demandByNode = new Map<string, number>();
   private readonly supplyCapByNode = new Map<string, number>();
   private connectedDemandW = 0;
@@ -71,7 +72,9 @@ export class PowerBalanceVisitor<E extends PowerEdge> implements TreeVisitor<E> 
     private readonly battery: DomainNode,
     private readonly batteryVoltageV: number,
     private readonly scenario: ScenarioInput
-  ) {}
+  ) {
+    for (const node of nodes) this.nodeById.set(node.id, node);
+  }
 
   prepare(tree: SpanningTree<E>) {
     this.tree = tree;
@@ -120,8 +123,12 @@ export class PowerBalanceVisitor<E extends PowerEdge> implements TreeVisitor<E> 
 
     const { maxChargeW, maxDischargeW } = resolveBatteryPowerCapsW(battery, batteryVoltageV);
 
+    const dispatchableSources = Array.from(this.supplyCapByNode.entries()).map(([sourceId, sourceCapW]) => {
+      return [sourceId, this.resolveSourceDeliverableToRootW(sourceId, sourceCapW)] as const;
+    });
+
     const totalSupplyCapW =
-      Array.from(this.supplyCapByNode.values()).reduce((a, b) => a + b, 0) + maxDischargeW;
+      dispatchableSources.reduce((sum, [, capW]) => sum + capW, 0) + maxDischargeW;
     const servedFactor =
       this.connectedDemandW > 0 ? Math.min(1, totalSupplyCapW / this.connectedDemandW) : 1;
     const servedDemandW = this.connectedDemandW * servedFactor;
@@ -151,7 +158,7 @@ export class PowerBalanceVisitor<E extends PowerEdge> implements TreeVisitor<E> 
 
     // Dispatch sources
     const supplyBudgetW = servedDemandW + (servedFactor === 1 ? maxChargeW : 0);
-    const sources = Array.from(this.supplyCapByNode.entries());
+    const sources = [...dispatchableSources];
     const dispatchPolicy = this.scenario.dispatchPolicy ?? "priority_order";
     const priority = this.scenario.sourcePriority ?? [];
 
@@ -246,6 +253,22 @@ export class PowerBalanceVisitor<E extends PowerEdge> implements TreeVisitor<E> 
 
       this.sizingDemandSubtreeW.set(nodeId, Math.max(0, upstreamDemandW));
       this.sizingSupplySubtreeW.set(nodeId, Math.max(0, upstreamSupplyW));
+    }
+  }
+
+  private resolveSourceDeliverableToRootW(sourceId: string, sourceCapW: number) {
+    let deliverableW = sourceCapW;
+    let cursor = sourceId;
+
+    while (true) {
+      const parentId = this.tree.parent.get(cursor);
+      if (parentId === undefined || parentId === null) return deliverableW;
+      const parentNode = this.nodeById.get(parentId);
+      if (!parentNode) return deliverableW;
+
+      // Propagate supply through each ancestor so converter output caps are enforced.
+      deliverableW = Math.abs(transformSubtreeW(parentNode, -deliverableW));
+      cursor = parentId;
     }
   }
 

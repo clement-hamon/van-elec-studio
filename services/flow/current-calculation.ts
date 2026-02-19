@@ -43,6 +43,12 @@ const clampEfficiency = (value: number | undefined) => {
   return Math.min(1, Math.max(0.01, value))
 }
 
+const minCaps = (...caps: Array<number | undefined>) => {
+  const finiteCaps = caps.filter((cap): cap is number => typeof cap === 'number' && Number.isFinite(cap))
+  if (!finiteCaps.length) return undefined
+  return Math.min(...finiteCaps.map(clampMinZero))
+}
+
 /**
  * Role:
  * Resolve load demand in watts from node params.
@@ -76,9 +82,48 @@ export const resolveNodeSupplyCapW = (node: CurrentNode, voltageV: number) => {
   if (node.type !== 'source') return 0
   const availableW = numberParam(node.params, 'availableW')
   const maxOutA = numberParam(node.params, 'maxOutA')
-  if (typeof availableW === 'number') return clampMinZero(availableW)
-  if (typeof maxOutA === 'number') return clampMinZero(maxOutA) * clampMinZero(voltageV)
+  const outputV = resolveNodeOutputVoltageV(node) ?? voltageV
+  const maxOutCapW = typeof maxOutA === 'number'
+    ? clampMinZero(maxOutA) * clampMinZero(outputV)
+    : undefined
+  const capW = minCaps(availableW, maxOutCapW)
+  if (typeof capW === 'number') return capW
   return 0
+}
+
+const resolveNodeOutputVoltageV = (node: CurrentNode) => {
+  const outputV = numberParam(node.params, 'outputV')
+  if (typeof outputV === 'number' && outputV > 0) return outputV
+  const operationalV = numberParam(node.params, 'operationalV')
+  if (typeof operationalV === 'number' && operationalV > 0) return operationalV
+  const nominalV = numberParam(node.params, 'nominalV')
+  if (typeof nominalV === 'number' && nominalV > 0) return nominalV
+  return undefined
+}
+
+/**
+ * Role:
+ * Resolve conversion output-power cap from converter params.
+ *
+ * Input:
+ * Converter node params (maxOutW/maxOutA + outputV family).
+ *
+ * Output:
+ * Non-negative cap in watts, or +Infinity when no converter output cap is defined.
+ */
+export const resolveConverterOutputCapW = (node: CurrentNode) => {
+  if (node.type !== 'conversion') return Number.POSITIVE_INFINITY
+  const maxOutW = numberParam(node.params, 'maxOutW')
+  const maxOutA = numberParam(node.params, 'maxOutA')
+  const outputV = resolveNodeOutputVoltageV(node)
+  const maxOutACapW = (typeof maxOutA === 'number' && typeof outputV === 'number')
+    ? clampMinZero(maxOutA) * clampMinZero(outputV)
+    : undefined
+  const capW = minCaps(maxOutW, maxOutACapW)
+  if (typeof capW === 'number') {
+    return capW
+  }
+  return Number.POSITIVE_INFINITY
 }
 
 /**
@@ -95,8 +140,18 @@ export const transformSubtreeW = (node: CurrentNode, subtreeW: number) => {
   if (node.type !== 'conversion') return subtreeW
   if (Math.abs(subtreeW) <= 1e-9) return 0
   const efficiency = clampEfficiency(numberParam(node.params, 'efficiency'))
-  if (subtreeW > 0) return subtreeW / efficiency
-  return subtreeW * efficiency
+  const converterOutputCapW = resolveConverterOutputCapW(node)
+
+  if (subtreeW > 0) {
+    // Downstream demand (converter output side) is capped by converter max output.
+    const cappedOutputDemandW = Math.min(subtreeW, converterOutputCapW)
+    return cappedOutputDemandW / efficiency
+  }
+
+  // Downstream supply transformed to converter output side is also capped.
+  const transformedOutputSupplyW = Math.abs(subtreeW) * efficiency
+  const cappedOutputSupplyW = Math.min(transformedOutputSupplyW, converterOutputCapW)
+  return -cappedOutputSupplyW
 }
 
 /**
@@ -116,6 +171,22 @@ export const resolveBatteryPowerCapsW = (battery: CurrentNode, batteryVoltageV: 
     maxDischargeW: maxDischargeA * batteryVoltageV,
     maxChargeW: maxChargeA * batteryVoltageV,
   }
+}
+
+/**
+ * Role:
+ * Resolve battery charging-current cap in amperes.
+ *
+ * Input:
+ * Battery node params.
+ *
+ * Output:
+ * Non-negative max charging current in amperes.
+ */
+export const resolveBatteryMaxChargeCurrentA = (battery: CurrentNode) => {
+  const maxDischargeA = numberParam(battery.params, 'maxDischargeA') ?? Number.POSITIVE_INFINITY
+  const maxChargeA = numberParam(battery.params, 'maxChargeA') ?? maxDischargeA
+  return clampMinZero(maxChargeA)
 }
 
 /**

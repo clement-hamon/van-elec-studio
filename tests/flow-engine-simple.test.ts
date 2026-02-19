@@ -131,6 +131,40 @@ describe("flow-engine", () => {
     expect(result.edges.e1?.limitedBy).toEqual(["source.maxSupplyA"]);
   });
 
+  it("caps charging cable current by battery max charge current", () => {
+    const input: FlowInput = {
+      graph: {
+        nodes: [
+          {
+            id: "bat",
+            type: "battery",
+            ports: [{ id: "p+", domain: "DC_12V", conductor: "POS", dir: "bidirectional" }],
+            params: { nominalV: 12, maxChargeA: 20, maxDischargeA: 120 }
+          },
+          {
+            id: "alt",
+            type: "source",
+            ports: [{ id: "out", domain: "DC_12V", conductor: "POS", dir: "out" }],
+            params: { maxOutA: 60 }
+          }
+        ],
+        edges: [
+          { id: "e1", from: { nodeId: "alt", portId: "out" }, to: { nodeId: "bat", portId: "p+" }, wire: { maxA: 80 } }
+        ]
+      },
+      scenario: {
+        currentComputationMode: "cable_sizing",
+        domainVoltage: { DC_12V: 12 }
+      }
+    };
+
+    const result = computeFlow(input);
+
+    expect(result.status).toBe("ok");
+    expect(result.edges.e1?.currentA).toBeCloseTo(20);
+    expect(result.edges.e1?.limitedBy).toContain("battery.maxChargeA");
+  });
+
   it("clamps battery discharge when overloaded", () => {
     const input: FlowInput = {
       graph: {
@@ -250,6 +284,121 @@ describe("flow-engine", () => {
     expect(result.edges.e2?.currentA).toBeCloseTo(2, 3);
     expect(result.edges.e1?.currentA).toBeCloseTo(42.5926, 3);
     expect(result.nodes.bat?.netA).toBeCloseTo(-42.5926, 3);
+  });
+
+  it("caps source supply and edge current through converter max output current", () => {
+    const input: FlowInput = {
+      graph: {
+        nodes: [
+          {
+            id: "bat",
+            type: "battery",
+            ports: [{ id: "p+", domain: "DC_12V", conductor: "POS", dir: "bidirectional" }],
+            params: { maxChargeA: 100, maxDischargeA: 120, nominalV: 12 }
+          },
+          {
+            id: "conv",
+            type: "conversion",
+            ports: [
+              { id: "in", domain: "DC_12V", conductor: "POS", dir: "in" },
+              { id: "out", domain: "DC_12V", conductor: "POS", dir: "out" }
+            ],
+            params: { maxOutA: 20, outputV: 12, efficiency: 1 }
+          },
+          {
+            id: "src",
+            type: "source",
+            ports: [{ id: "out", domain: "DC_12V", conductor: "POS", dir: "out" }],
+            params: { maxOutA: 60 }
+          }
+        ],
+        edges: [
+          { id: "e1", from: { nodeId: "conv", portId: "out" }, to: { nodeId: "bat", portId: "p+" }, wire: { maxA: 80 } },
+          { id: "e2", from: { nodeId: "src", portId: "out" }, to: { nodeId: "conv", portId: "in" }, wire: { maxA: 80 } }
+        ]
+      },
+      scenario: {}
+    };
+
+    const result = computeFlow(input);
+
+    expect(result.status).toBe("ok");
+    expect(result.nodes.src?.supplyW).toBeCloseTo(240);
+    expect(Math.abs(result.edges.e1?.currentA ?? 0)).toBeCloseTo(20);
+    expect(Math.abs(result.edges.e2?.currentA ?? 0)).toBeCloseTo(20);
+  });
+
+  it("caps source supply by maxOutA even when availableW is higher", () => {
+    const input: FlowInput = {
+      graph: {
+        nodes: [
+          {
+            id: "bat",
+            type: "battery",
+            ports: [{ id: "p+", domain: "DC_12V", conductor: "POS", dir: "bidirectional" }],
+            params: { maxChargeA: 100, maxDischargeA: 120, nominalV: 12 }
+          },
+          {
+            id: "src",
+            type: "source",
+            ports: [{ id: "out", domain: "DC_12V", conductor: "POS", dir: "out" }],
+            params: { availableW: 1000, maxOutA: 20, outputV: 12 }
+          }
+        ],
+        edges: [
+          { id: "e1", from: { nodeId: "src", portId: "out" }, to: { nodeId: "bat", portId: "p+" }, wire: { maxA: 80 } }
+        ]
+      },
+      scenario: {}
+    };
+
+    const result = computeFlow(input);
+
+    expect(result.status).toBe("ok");
+    expect(result.nodes.src?.supplyW).toBeCloseTo(240);
+    expect(Math.abs(result.edges.e1?.currentA ?? 0)).toBeCloseTo(20);
+  });
+
+  it("applies the strictest converter output cap when maxOutW and maxOutA are both defined", () => {
+    const input: FlowInput = {
+      graph: {
+        nodes: [
+          {
+            id: "bat",
+            type: "battery",
+            ports: [{ id: "p+", domain: "DC_12V", conductor: "POS", dir: "bidirectional" }],
+            params: { maxChargeA: 100, maxDischargeA: 120, nominalV: 12 }
+          },
+          {
+            id: "conv",
+            type: "conversion",
+            ports: [
+              { id: "in", domain: "DC_12V", conductor: "POS", dir: "in" },
+              { id: "out", domain: "DC_12V", conductor: "POS", dir: "out" }
+            ],
+            params: { maxOutW: 400, maxOutA: 20, outputV: 12, efficiency: 1 }
+          },
+          {
+            id: "src",
+            type: "source",
+            ports: [{ id: "out", domain: "DC_12V", conductor: "POS", dir: "out" }],
+            params: { maxOutA: 80 }
+          }
+        ],
+        edges: [
+          { id: "e1", from: { nodeId: "conv", portId: "out" }, to: { nodeId: "bat", portId: "p+" }, wire: { maxA: 80 } },
+          { id: "e2", from: { nodeId: "src", portId: "out" }, to: { nodeId: "conv", portId: "in" }, wire: { maxA: 80 } }
+        ]
+      },
+      scenario: {}
+    };
+
+    const result = computeFlow(input);
+
+    expect(result.status).toBe("ok");
+    expect(result.nodes.src?.supplyW).toBeCloseTo(240);
+    expect(Math.abs(result.edges.e1?.currentA ?? 0)).toBeCloseTo(20);
+    expect(Math.abs(result.edges.e2?.currentA ?? 0)).toBeCloseTo(20);
   });
 
   it("flags direct overvoltage connection from source to battery", () => {
