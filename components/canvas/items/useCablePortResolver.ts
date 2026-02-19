@@ -35,8 +35,8 @@ const pickPreferredPortId = (
 export const useCablePortResolver = () => {
   const connectionScore = (sourceDir: PortDirection, targetDir: PortDirection) => {
     if (sourceDir === 'out' && targetDir === 'in') return 100
-    if (sourceDir === 'out' && targetDir === 'bidirectional') return 95
-    if (sourceDir === 'bidirectional' && targetDir === 'in') return 85
+    if (sourceDir === 'bidirectional' && targetDir === 'in') return 95
+    if (sourceDir === 'out' && targetDir === 'bidirectional') return 90
     if (sourceDir === 'bidirectional' && targetDir === 'bidirectional') return 70
     return null
   }

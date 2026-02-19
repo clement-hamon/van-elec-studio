@@ -357,20 +357,6 @@ const onTargetPortChange = (event: Event) => {
 </script>
 
 <style scoped>
-.swap-button {
-  margin-top: 8px;
-  border: 1px solid #2d2a25;
-  background: #f6f1e6;
-  color: #2d2a25;
-  padding: 6px 10px;
-  border-radius: 8px;
-  font-size: 13px;
-  cursor: pointer;
-}
-
-.swap-button:hover {
-  background: #ede5d7;
-}
 
 .port-list {
   display: grid;
