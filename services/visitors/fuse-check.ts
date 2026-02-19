@@ -1,6 +1,9 @@
 import type { Diagnostic, NodeType } from "../../types/schema";
-import { policyForNode } from "../flow/node-policies";
-import { DEFAULT_DOMAIN_VOLTAGE } from "../flow/voltage-domain";
+import {
+  powerToCurrentMagnitudeA,
+  resolveEdgeVoltageV,
+  transformSubtreeW,
+} from "../flow/current-calculation";
 import type { GraphEdge } from "../spanning-tree";
 import type { TreeVisitor } from "./tree-visitor";
 
@@ -34,12 +37,15 @@ const MAX_FUSE_DISTANCE_M = 0.3;
 // ── Visitor ────────────────────────────────────────────────
 
 /**
- * Postorder visitor: accumulates subtree power sums and opens fuses
- * when edge current exceeds the rating.
+ * Role:
+ * Postorder protection pass that evaluates fuses and protection placement
+ * from centralized subtree power values.
  *
- * Must run AFTER PowerBalanceVisitor (needs injectionsW).
+ * Input:
+ * Node injections from power-balance, tree edges, and fuse/wire metadata.
  *
- * After the walk, exposes: subtreeW, blockedNodes, blownEdges.
+ * Output:
+ * Updated subtree power maps plus blocked nodes, blown edges and diagnostics.
  */
 export class FuseCheckVisitor<E extends FuseEdge> implements TreeVisitor<E> {
   readonly name = "fuse-check";
@@ -91,19 +97,16 @@ export class FuseCheckVisitor<E extends FuseEdge> implements TreeVisitor<E> {
     if (node) {
       // Converter nodes transform required upstream power by efficiency.
       // Example: 500W load behind a 90% converter requires ~556W upstream.
-      sumW = policyForNode(node).transformSubtreeW(node, sumW);
+      sumW = transformSubtreeW(node, sumW);
     }
 
     // Check fuse
     const nodeFuseA = numberParam(node?.params, "ratingA");
     const edgeFuseA = parentEdge?.fuseA;
     const fuseA = edgeFuseA ?? nodeFuseA;
-    const edgeVoltageV =
-      parentEdge?.voltageV && parentEdge.voltageV > 0
-        ? parentEdge.voltageV
-        : DEFAULT_DOMAIN_VOLTAGE;
+    const edgeVoltageV = resolveEdgeVoltageV(parentEdge?.voltageV);
     // Fuse ratings are current-based, so we convert subtree power to edge current locally.
-    const currentA = Math.abs(sumW) / edgeVoltageV;
+    const currentA = powerToCurrentMagnitudeA(sumW, edgeVoltageV);
     this.preProtectionSubtreeW.set(nodeId, sumW);
 
     if (parentEdge && fuseA && currentA > fuseA + 1e-6) {

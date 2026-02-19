@@ -1,5 +1,11 @@
 import type { Diagnostic, NodeFlow, ScenarioInput, NodeType } from "../../types/schema";
-import { policyForNode } from "../flow/node-policies";
+import {
+  CURRENT_LIMIT_REASONS,
+  resolveBatteryPowerCapsW,
+  resolveNodeDemandW,
+  resolveNodeSupplyCapW,
+  transformSubtreeW,
+} from "../flow/current-calculation";
 import type { GraphEdge, SpanningTree } from "../spanning-tree";
 import type { TreeVisitor } from "./tree-visitor";
 
@@ -13,11 +19,6 @@ export interface DomainNode {
   params?: Record<string, unknown>;
 }
 
-const numberParam = (params: Record<string, unknown> | undefined, key: string) => {
-  const value = params?.[key];
-  return typeof value === "number" && Number.isFinite(value) ? value : undefined;
-};
-
 export interface PowerEdge extends GraphEdge {
   voltageV?: number;
 }
@@ -25,11 +26,16 @@ export interface PowerEdge extends GraphEdge {
 // ── Visitor ────────────────────────────────────────────────
 
 /**
- * Postorder visitor: gathers per-node demand/supply data during the walk,
- * then solves the global power balance when the root is reached.
+ * Role:
+ * Postorder visitor that orchestrates power-balance solving using centralized
+ * formulas from flow/current-calculation.
  *
- * After the walk, exposes: nodeFlows, injectionsW, totalDemandW,
- * totalSupplyW, hasUnserved.
+ * Input:
+ * Graph nodes, tree topology, battery reference, scenario settings.
+ *
+ * Output:
+ * nodeFlows, signed node injections (W), sizing envelopes, total demand/supply,
+ * and diagnostics about shortages/limits.
  */
 export class PowerBalanceVisitor<E extends PowerEdge> implements TreeVisitor<E> {
   readonly name = "power-balance";
@@ -75,13 +81,12 @@ export class PowerBalanceVisitor<E extends PowerEdge> implements TreeVisitor<E> 
     const node = this.nodes.find((n) => n.id === nodeId);
     if (!node) return;
 
-    const policy = policyForNode(node);
     const nodeVoltage = parentEdge?.voltageV && parentEdge.voltageV > 0
       ? parentEdge.voltageV
       : this.batteryVoltageV;
 
     if (node.type === "load") {
-      const demandW = policy.demandW(node, nodeVoltage);
+      const demandW = resolveNodeDemandW(node, nodeVoltage);
       this.demandByNode.set(node.id, demandW);
       this.totalDemandW += demandW;
       if (this.tree.parent.has(node.id)) this.connectedDemandW += demandW;
@@ -89,7 +94,7 @@ export class PowerBalanceVisitor<E extends PowerEdge> implements TreeVisitor<E> 
     }
 
     if (node.type === "source" && this.tree.parent.has(node.id)) {
-      this.supplyCapByNode.set(node.id, policy.supplyCapW(node, nodeVoltage));
+      this.supplyCapByNode.set(node.id, resolveNodeSupplyCapW(node, nodeVoltage));
     }
 
     // Solve when we reach the root (last node in postorder)
@@ -99,14 +104,21 @@ export class PowerBalanceVisitor<E extends PowerEdge> implements TreeVisitor<E> 
     }
   }
 
+  /**
+   * Role:
+   * Solve served demand, source dispatch, and battery charge/discharge state.
+   *
+   * Input:
+   * Connected demand, source capacities, battery caps and scenario dispatch policy.
+   *
+   * Output:
+   * Filled injectionsW/nodeFlows plus shortage/limit diagnostics.
+   */
   private solve() {
     const batteryVoltageV = this.batteryVoltageV;
     const battery = this.battery;
 
-    const maxDischargeA = numberParam(battery.params, "maxDischargeA") ?? Number.POSITIVE_INFINITY;
-    const maxChargeA = numberParam(battery.params, "maxChargeA") ?? maxDischargeA;
-    const maxDischargeW = maxDischargeA * batteryVoltageV;
-    const maxChargeW = maxChargeA * batteryVoltageV;
+    const { maxChargeW, maxDischargeW } = resolveBatteryPowerCapsW(battery, batteryVoltageV);
 
     const totalSupplyCapW =
       Array.from(this.supplyCapByNode.values()).reduce((a, b) => a + b, 0) + maxDischargeW;
@@ -130,7 +142,10 @@ export class PowerBalanceVisitor<E extends PowerEdge> implements TreeVisitor<E> 
       // Positive injection means "this node consumes this many watts".
       this.injectionsW.set(node.id, servedW);
       if (servedFactor < 1 && servedW < demandW) {
-        this.nodeFlows[node.id] = { ...this.nodeFlows[node.id], clampedBy: ["supply.shortage"] };
+        this.nodeFlows[node.id] = {
+          ...this.nodeFlows[node.id],
+          clampedBy: [CURRENT_LIMIT_REASONS.supplyShortage],
+        };
       }
     }
 
@@ -185,7 +200,7 @@ export class PowerBalanceVisitor<E extends PowerEdge> implements TreeVisitor<E> 
           code: "EXCESS_SUPPLY",
           message: "Supply exceeds load and battery charge limit; excess is unused."
         });
-        batteryFlow.clampedBy = ["battery.maxChargeA"];
+        batteryFlow.clampedBy = [CURRENT_LIMIT_REASONS.batteryMaxChargeA];
       }
     } else {
       const dischargeW = Math.min(-netFromSourcesW, maxDischargeW);
@@ -196,7 +211,7 @@ export class PowerBalanceVisitor<E extends PowerEdge> implements TreeVisitor<E> 
           code: "UNSERVED_DEMAND",
           message: "Battery discharge limit prevents serving all demand."
         });
-        batteryFlow.clampedBy = ["battery.maxDischargeA"];
+        batteryFlow.clampedBy = [CURRENT_LIMIT_REASONS.batteryMaxDischargeA];
       }
     }
 
@@ -226,9 +241,8 @@ export class PowerBalanceVisitor<E extends PowerEdge> implements TreeVisitor<E> 
         supplyW += this.sizingSupplySubtreeW.get(childId) ?? 0;
       }
 
-      const policy = policyForNode(node);
-      const upstreamDemandW = policy.transformSubtreeW(node, demandW);
-      const upstreamSupplyW = Math.abs(policy.transformSubtreeW(node, -supplyW));
+      const upstreamDemandW = transformSubtreeW(node, demandW);
+      const upstreamSupplyW = Math.abs(transformSubtreeW(node, -supplyW));
 
       this.sizingDemandSubtreeW.set(nodeId, Math.max(0, upstreamDemandW));
       this.sizingSupplySubtreeW.set(nodeId, Math.max(0, upstreamSupplyW));

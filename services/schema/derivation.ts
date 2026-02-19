@@ -1,4 +1,5 @@
 import { computeCableDerived, estimateAmpacityForAwg, findRequiredAwgForCurrent } from '~/services/cable'
+import { toCableDesignCurrentA } from '~/services/flow/current-calculation'
 import { computeFlow } from '~/services/flow-engine'
 import { resolveVoltageForDomain } from '~/services/flow/voltage-domain'
 import { buildPortIndex, portKey } from '~/services/graph/indexes'
@@ -16,7 +17,16 @@ import type {
 } from '~/types/schema'
 import { defaultImageScaleRatio, defaultScenario, normalizeScenario, normalizeSchema, nowIso } from './normalize'
 
-const CABLE_SIZING_DESIGN_MARGIN = 1.25
+/**
+ * Role:
+ * Schema derivation orchestrator for store-level recalculation.
+ *
+ * Input:
+ * Canonical schema state + component registry + scenario.
+ *
+ * Output:
+ * Normalized schema with recomputed cable derived fields and latest flow result.
+ */
 
 export const emptyDerived: CableDerived = {
   ampacityA: 0,
@@ -61,6 +71,16 @@ const buildCable = (
   }
 }
 
+/**
+ * Role:
+ * Execute full schema derivation pass (normalize -> flow -> cable metrics).
+ *
+ * Input:
+ * Raw schema state and component registry.
+ *
+ * Output:
+ * Derived schema and flow output to be consumed by the store/UI.
+ */
 export const applyDerivedAll = (
   schema: SchemaState,
   registry: ComponentType[],
@@ -89,7 +109,7 @@ export const applyDerivedAll = (
       const edgeFlow = flow?.edges[cable.id]
       const sizingCurrentA = edgeFlow ? Math.abs(edgeFlow.currentA) : 0
       // Continuous-load conductor sizing convention: 125% design current.
-      const designCurrentA = sizingCurrentA * CABLE_SIZING_DESIGN_MARGIN
+      const designCurrentA = toCableDesignCurrentA(sizingCurrentA)
       const domain = resolveCableDomain(cable, portByKey)
       const circuitVoltageV = resolveVoltageForDomain(domain, scenario)
       const autoGaugeAwg = findRequiredAwgForCurrent(designCurrentA, {

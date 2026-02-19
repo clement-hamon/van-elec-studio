@@ -1,4 +1,21 @@
 import type { NodeType } from "../../types/schema";
+import {
+  resolveNodeDemandW,
+  resolveNodeSupplyCapW,
+  transformSubtreeW as transformNodeSubtreeW,
+} from "./current-calculation";
+
+/**
+ * Role:
+ * Transitional adapter layer that preserves the NodePolicy API expected by
+ * visitors while delegating formulas to flow/current-calculation.
+ *
+ * Input:
+ * PolicyNode + local voltage + subtree power.
+ *
+ * Output:
+ * Demand/supply/transform values from the centralized current model.
+ */
 
 export interface PolicyNode {
   id: string;
@@ -15,77 +32,28 @@ export interface NodePolicy {
   transformSubtreeW(node: PolicyNode, subtreeW: number): number;
 }
 
-const numberParam = (params: Record<string, unknown> | undefined, key: string) => {
-  const value = params?.[key];
-  return typeof value === "number" && Number.isFinite(value) ? value : undefined;
-};
-
-const clampMinZero = (value: number) => Math.max(0, value);
-
-const clampEfficiency = (value: number | undefined) => {
-  if (typeof value !== "number" || !Number.isFinite(value)) return 1;
-  return Math.min(1, Math.max(0.01, value));
-};
-
-const defaultPolicy: NodePolicy = {
-  demandW() {
-    return 0;
-  },
-  supplyCapW() {
-    return 0;
-  },
-  transformSubtreeW(_node, subtreeW) {
-    return subtreeW;
-  },
-};
-
-const loadPolicy: NodePolicy = {
-  ...defaultPolicy,
+/**
+ * Role:
+ * Compatibility adapter kept for visitors that still consume a NodePolicy API.
+ *
+ * Input:
+ * Any node type + local branch voltage.
+ *
+ * Output:
+ * Delegated current/power formulas from flow/current-calculation.
+ */
+const delegatedPolicy: NodePolicy = {
   demandW(node, voltageV) {
-    const watts = numberParam(node.params, "watts");
-    const amps = numberParam(node.params, "amps");
-    const dutyCycle = numberParam(node.params, "dutyCycle") ?? 1;
-
-    const baseW = typeof watts === "number" ? watts : typeof amps === "number" ? amps * voltageV : 0;
-    return clampMinZero(baseW) * clampMinZero(dutyCycle);
+    return resolveNodeDemandW(node, voltageV);
   },
-};
-
-const sourcePolicy: NodePolicy = {
-  ...defaultPolicy,
   supplyCapW(node, voltageV) {
-    const availableW = numberParam(node.params, "availableW");
-    const maxOutA = numberParam(node.params, "maxOutA");
-
-    if (typeof availableW === "number") return clampMinZero(availableW);
-    if (typeof maxOutA === "number") return clampMinZero(maxOutA) * clampMinZero(voltageV);
-    return 0;
+    return resolveNodeSupplyCapW(node, voltageV);
   },
-};
-
-const conversionPolicy: NodePolicy = {
-  ...defaultPolicy,
   transformSubtreeW(node, subtreeW) {
-    if (Math.abs(subtreeW) <= 1e-9) return 0;
-
-    const efficiency = clampEfficiency(numberParam(node.params, "efficiency"));
-    // Positive subtreeW means demand flowing from parent -> child.
-    // Upstream side must provide more power than downstream demand.
-    if (subtreeW > 0) return subtreeW / efficiency;
-    // Negative subtreeW means supply flowing child -> parent.
-    // Upstream delivered supply is reduced by conversion losses.
-    return subtreeW * efficiency;
+    return transformNodeSubtreeW(node, subtreeW);
   },
 };
 
-const policyByType: Record<NodeType, NodePolicy> = {
-  source: sourcePolicy,
-  battery: defaultPolicy,
-  conversion: conversionPolicy,
-  distribution: defaultPolicy,
-  load: loadPolicy,
-};
-
-export const policyForNode = (node: PolicyNode): NodePolicy => {
-  return policyByType[node.type] ?? defaultPolicy;
+export const policyForNode = (_node: PolicyNode): NodePolicy => {
+  return delegatedPolicy;
 };

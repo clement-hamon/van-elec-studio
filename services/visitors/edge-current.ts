@@ -1,5 +1,12 @@
 import type { CurrentComputationMode, Diagnostic, EdgeFlow } from "../../types/schema";
-import { DEFAULT_DOMAIN_VOLTAGE } from "../flow/voltage-domain";
+import {
+  CURRENT_LIMIT_REASONS,
+  resolveCurrentUtilization,
+  resolveEdgeVoltageV,
+  resolveSimulationLimitReasons,
+  resolveSizingFlow,
+  powerToCurrentMagnitudeA,
+} from "../flow/current-calculation";
 import type { GraphEdge } from "../spanning-tree";
 import type { TreeVisitor } from "./tree-visitor";
 
@@ -14,12 +21,15 @@ export interface WiredEdge extends GraphEdge {
 // ── Visitor ────────────────────────────────────────────────
 
 /**
- * Preorder visitor: assigns signed current to each tree edge
- * based on the subtree power sums computed by FuseCheckVisitor.
+ * Role:
+ * Preorder visitor that converts solved subtree powers into edge currents.
  *
- * Must run AFTER FuseCheckVisitor.
+ * Input:
+ * Subtree power maps from upstream visitors, edge voltage metadata and
+ * current-computation mode.
  *
- * After the walk, exposes: edgeFlows.
+ * Output:
+ * edgeFlows with signed current, utilization and standardized limit reasons.
  */
 export class EdgeCurrentVisitor<E extends WiredEdge> implements TreeVisitor<E> {
   readonly name = "edge-current";
@@ -54,46 +64,58 @@ export class EdgeCurrentVisitor<E extends WiredEdge> implements TreeVisitor<E> {
     return this._diagnostics;
   }
 
+  /**
+   * Role:
+   * Compute runtime current from solved subtree power.
+   *
+   * Input:
+   * nodeId/parentId relation and parent edge metadata.
+   *
+   * Output:
+   * Signed edge current for simulation mode + wire-limit reason when applicable.
+   */
   private computeSimulationFlow(nodeId: string, parentId: string, parentEdge: E): EdgeFlow | null {
-    if (this.blownEdges.has(parentEdge.id)) return { currentA: 0, limitedBy: ["fuseA"] };
+    if (this.blownEdges.has(parentEdge.id)) {
+      return { currentA: 0, limitedBy: [CURRENT_LIMIT_REASONS.fuseA] };
+    }
     if (this.blockedNodes.has(nodeId) || this.blockedNodes.has(parentId)) return { currentA: 0 };
 
-    const edgeVoltageV = this.resolveEdgeVoltage(parentEdge);
+    const edgeVoltageV = resolveEdgeVoltageV(parentEdge.voltageV);
     const flowW = this.subtreeW.get(nodeId) ?? 0;
-    const demandA = Math.abs(flowW) / edgeVoltageV;
+    const demandA = powerToCurrentMagnitudeA(flowW, edgeVoltageV);
     const signedA = this.resolveSignedCurrent(parentEdge, parentId, nodeId, demandA);
     const maxA = parentEdge.wire?.maxA;
-
-    const limitedBy: string[] = [];
-    if (maxA && Math.abs(signedA) > maxA + 1e-6) limitedBy.push("wire.maxA");
+    const limitedBy = resolveSimulationLimitReasons(signedA, maxA);
 
     return {
       currentA: signedA,
-      utilization: maxA ? Math.abs(signedA) / maxA : undefined,
+      utilization: resolveCurrentUtilization(signedA, maxA),
       limitedBy: limitedBy.length ? limitedBy : undefined
     };
   }
 
+  /**
+   * Role:
+   * Compute branch sizing current envelope for cable-sizing mode.
+   *
+   * Input:
+   * Demand/supply subtree power envelopes for the child subtree.
+   *
+   * Output:
+   * Signed design-basis edge current + envelope limiting reason(s).
+   */
   private computeCableSizingFlow(nodeId: string, parentId: string, parentEdge: E): EdgeFlow {
-    const edgeVoltageV = this.resolveEdgeVoltage(parentEdge);
+    const edgeVoltageV = resolveEdgeVoltageV(parentEdge.voltageV);
     const demandW = this.sizingDemandSubtreeW.get(nodeId) ?? Math.max(0, this.preProtectionSubtreeW.get(nodeId) ?? 0);
     const supplyW = this.sizingSupplySubtreeW.get(nodeId) ?? 0;
-    const demandA = demandW / edgeVoltageV;
-    const supplyA = supplyW / edgeVoltageV;
-    const sizedA = Math.max(demandA, supplyA);
-    const flowParentToChildA = demandA >= supplyA ? sizedA : -sizedA;
+    const { flowParentToChildA, limitedBy } = resolveSizingFlow(demandW, supplyW, edgeVoltageV);
     const signedA = this.resolveSignedCurrent(parentEdge, parentId, nodeId, flowParentToChildA);
     const maxA = parentEdge.wire?.maxA;
-    const limitedBy = this.sizingLimitedBy(demandA, supplyA);
     return {
       currentA: signedA,
-      utilization: maxA ? Math.abs(signedA) / maxA : undefined,
+      utilization: resolveCurrentUtilization(signedA, maxA),
       limitedBy: limitedBy.length ? limitedBy : undefined
     };
-  }
-
-  private resolveEdgeVoltage(parentEdge: E) {
-    return parentEdge.voltageV && parentEdge.voltageV > 0 ? parentEdge.voltageV : DEFAULT_DOMAIN_VOLTAGE;
   }
 
   private resolveSignedCurrent(parentEdge: E, parentId: string, nodeId: string, flowParentToChildA: number) {
@@ -107,17 +129,5 @@ export class EdgeCurrentVisitor<E extends WiredEdge> implements TreeVisitor<E> {
       refs: [{ edgeId: parentEdge.id }]
     });
     return flowParentToChildA;
-  }
-
-  private sizingLimitedBy(demandA: number, supplyA: number) {
-    const limitedBy: string[] = [];
-    const epsilon = 1e-6;
-    if (Math.abs(demandA - supplyA) <= epsilon && Math.max(demandA, supplyA) > epsilon) {
-      limitedBy.push("load.maxDemandA", "source.maxSupplyA");
-      return limitedBy;
-    }
-    if (demandA > supplyA + epsilon) limitedBy.push("load.maxDemandA");
-    if (supplyA > demandA + epsilon) limitedBy.push("source.maxSupplyA");
-    return limitedBy;
   }
 }
