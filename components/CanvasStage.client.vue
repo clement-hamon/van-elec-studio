@@ -64,6 +64,7 @@ import { NODE_HEIGHT, NODE_WIDTH, type CanvasMode } from '~/components/canvas/it
 import { useCanvasItems } from '~/components/canvas/items/useCanvasItems'
 import type { CableConductorChoice } from '~/components/canvas/items/useCablePortResolver'
 import { useSchemaStore } from '~/stores/schema'
+import type { ComponentInstance } from '~/types/schema'
 
 const props = defineProps<{
   mode: CanvasMode
@@ -85,27 +86,15 @@ const canZoomIn = computed(() => zoomLevel.value < maxScale - 0.001)
 const canZoomOut = computed(() => zoomLevel.value > minScale + 0.001)
 
 type CableChoiceDialog = {
-  sourceId: string
-  targetId: string
+  source: ComponentInstance
+  target: ComponentInstance
   availableConductors: CableConductorChoice[]
   resolve: (choice: CableConductorChoice | null) => void
 }
 
 const cableChoiceDialog = ref<CableChoiceDialog | null>(null)
-const cableChoiceSourceName = computed(() => {
-  const sourceId = cableChoiceDialog.value?.sourceId
-  if (!sourceId) return ''
-  return (
-    schemaStore.schema.components.find((component) => component.id === sourceId)?.name ?? sourceId
-  )
-})
-const cableChoiceTargetName = computed(() => {
-  const targetId = cableChoiceDialog.value?.targetId
-  if (!targetId) return ''
-  return (
-    schemaStore.schema.components.find((component) => component.id === targetId)?.name ?? targetId
-  )
-})
+const cableChoiceSourceName = computed(() => cableChoiceDialog.value?.source.name ?? '')
+const cableChoiceTargetName = computed(() => cableChoiceDialog.value?.target.name ?? '')
 
 let stage: Konva.Stage | null = null
 let layer: Konva.Layer | null = null
@@ -134,15 +123,15 @@ const canChooseConductor = (choice: CableConductorChoice) => {
 }
 
 const promptCableConductor = (payload: {
-  sourceId: string
-  targetId: string
+  source: ComponentInstance
+  target: ComponentInstance
   availableConductors: CableConductorChoice[]
 }) => {
   if (cableChoiceDialog.value) cancelCableChoice()
   return new Promise<CableConductorChoice | null>((resolve) => {
     cableChoiceDialog.value = {
-      sourceId: payload.sourceId,
-      targetId: payload.targetId,
+      source: payload.source,
+      target: payload.target,
       availableConductors: payload.availableConductors,
       resolve,
     }

@@ -27,6 +27,7 @@ import {
   resolveVoltageForDomain,
 } from "./flow/voltage-domain";
 import { validateDcNegativeReturn } from "./flow/dc-negative-return";
+import { buildEnabledPortIndex, isNodeEnabled, portKey } from "./graph/indexes";
 
 import { buildAdjacency, buildSpanningTree } from "./spanning-tree";
 import { runVisitors } from "./visitors/tree-visitor";
@@ -66,11 +67,6 @@ interface FlowEdge {
 const DEFAULT_TOTALS_DOMAIN = "dc";
 const FLOW_CONDUCTORS = new Set<Conductor>(["POS", "L"]);
 const PASSIVE_CONDUCTORS = new Set<Conductor>(["NEG"]);
-
-const isEnabled = (nodeId: string, scenario: ScenarioInput) => {
-  const enabled = scenario.enabledNodes?.[nodeId];
-  return enabled !== false;
-};
 
 const isSupportedDomain = (domain: string) => {
   return isDCDomain(domain) || isACDomain(domain);
@@ -262,7 +258,7 @@ class FlowEngine {
 
     for (const node of graph.nodes) {
       // only include enabled nodes
-      if (!isEnabled(node.id, scenario)) continue;
+      if (!isNodeEnabled(node.id, scenario)) continue;
 
       const initialType = node.type;
       const mappedType = nodeTypes.includes(initialType as NodeType)
@@ -288,24 +284,18 @@ class FlowEngine {
     }
 
     // Quick lookup for ports by nodeId:portId.
-    const portByKey = new Map<string, Port>();
-    for (const node of graph.nodes) {
-      if (!isEnabled(node.id, scenario)) continue;
-      for (const port of node.ports) {
-        portByKey.set(`${node.id}:${port.id}`, port);
-      }
-    }
+    const portByKey = buildEnabledPortIndex(graph.nodes, scenario);
 
     // Include only edges that connect enabled nodes and have compatible domains/conductors.
     const edges: FlowEdge[] = [];
     for (const edge of graph.edges) {
-      if (!isEnabled(edge.from.nodeId, scenario) || !isEnabled(edge.to.nodeId, scenario)) continue;
+      if (!isNodeEnabled(edge.from.nodeId, scenario) || !isNodeEnabled(edge.to.nodeId, scenario)) continue;
       if (edge.from.nodeId === edge.to.nodeId) continue;
 
-      const fromKey = `${edge.from.nodeId}:${edge.from.portId}`;
-      const toKey = `${edge.to.nodeId}:${edge.to.portId}`;
-      const fromPort = portByKey.get(fromKey) as Port;
-      const toPort = portByKey.get(toKey) as Port;
+      const fromKey = portKey(edge.from.nodeId, edge.from.portId);
+      const toKey = portKey(edge.to.nodeId, edge.to.portId);
+      const fromPort = portByKey.get(fromKey);
+      const toPort = portByKey.get(toKey);
 
       if (!fromPort || !toPort) {
         diagnostics.push({

@@ -166,3 +166,39 @@ All user data is stored locally in the browser to keep the project self‑contai
 - New component types are added to a registry without changing rendering logic.
 - New validation rules can be added without touching the UI.
 - Rendering style can be upgraded while keeping domain logic intact.
+
+
+Current module roles (after removal)
+
+schema.ts: canonical domain + flow types.
+definitions.ts: reusable inspector field definitions.
+registry.ts: component catalog (defaults + ports).
+ports.ts: build/merge runtime ports from registry definitions.
+schema.ts: single orchestration point (state, mutations, derive cable data, call flow engine, persistence hooks).
+storage.ts: localStorage persistence + undo history.
+cable.ts: AWG/ampacity/resistance/voltage-drop/sizing math.
+flow-engine.ts: flow solver pipeline coordinator.
+spanning-tree.ts: generic graph adjacency + BFS tree traversal primitives.
+voltage-domain.ts: domain normalization and voltage resolution.
+node-policies.ts: per-node demand/supply/conversion policies.
+dc-negative-return.ts: DC negative return-path validator.
+tree-visitor.ts: visitor contract + pipeline runner.
+power-balance.ts: demand/supply balancing and battery state.
+fuse-check.ts: fuse-trip and unprotected-wire diagnostics.
+edge-current.ts: computes edge currents/utilization.
+voltage-compatibility.ts: overvoltage compatibility checks.
+CanvasStage.client.vue: Konva stage lifecycle + zoom/pan + connect interactions.
+CanvasControls.vue: zoom UI controls.
+useCanvasItems.ts: node+cable scene sync orchestrator.
+useCanvasNodes.ts: node rendering + selection + cable creation.
+useCanvasCables.ts: cable rendering + flow labels + styling.
+useCablePortResolver.ts: chooses compatible endpoints/conductors.
+orthogonalPath.ts: orthogonal cable routing geometry.
+constants.ts: canvas sizing/mode constants.
+InspectorPanel.vue: property editor for selected component/cable + issue view.
+SchemaSummary.vue: aggregated cable summary view.
+index.vue: workspace composition and mode controls.
+default.vue: top shell (undo/reset) + initial store load.
+app.vue: Nuxt app/layout mount.
+flow-engine-simple.test.ts: core flow behavior coverage.
+flow-engine-dc-negative.test.ts: DC negative-return rule coverage.

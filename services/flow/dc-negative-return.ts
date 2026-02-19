@@ -8,32 +8,11 @@ import type {
   ScenarioInput,
   Severity,
 } from "../../types/schema";
+import { buildEnabledPortIndex, buildNodeIndex, isNodeEnabled, portKey } from "../graph/indexes";
 import { isDCDomain } from "./voltage-domain";
 
 const NEGATIVE_CONDUCTOR: Conductor = "NEG";
 const POSITIVE_CONDUCTOR: Conductor = "POS";
-
-const isEnabled = (nodeId: string, scenario: ScenarioInput | undefined) => {
-  const enabled = scenario?.enabledNodes?.[nodeId];
-  return enabled !== false;
-};
-
-const portKey = (nodeId: string, portId: string) => `${nodeId}:${portId}`;
-
-const buildPortIndex = (graph: GraphInput, scenario: ScenarioInput | undefined) => {
-  const byKey = new Map<string, Port>();
-  for (const node of graph.nodes) {
-    if (!isEnabled(node.id, scenario)) continue;
-    for (const port of node.ports) {
-      byKey.set(portKey(node.id, port.id), port);
-    }
-  }
-  return byKey;
-};
-
-const buildNodeIndex = (graph: GraphInput) => {
-  return new Map<string, BaseNode>(graph.nodes.map((node) => [node.id, node] as const));
-};
 
 const buildNegativeAdjacency = (graph: GraphInput, scenario: ScenarioInput | undefined, portByKey: Map<string, Port>) => {
   const adjacency = new Map<string, Set<string>>();
@@ -43,7 +22,7 @@ const buildNegativeAdjacency = (graph: GraphInput, scenario: ScenarioInput | und
   };
 
   for (const edge of graph.edges) {
-    if (!isEnabled(edge.from.nodeId, scenario) || !isEnabled(edge.to.nodeId, scenario)) continue;
+    if (!isNodeEnabled(edge.from.nodeId, scenario) || !isNodeEnabled(edge.to.nodeId, scenario)) continue;
 
     const fromPort = portByKey.get(portKey(edge.from.nodeId, edge.from.portId));
     const toPort = portByKey.get(portKey(edge.to.nodeId, edge.to.portId));
@@ -98,7 +77,7 @@ export const validateDcNegativeReturn = (context: DcNegativeReturnContext): Diag
 
   const diagnostics: Diagnostic[] = [];
   const severity = severityForMode(mode);
-  const nodeById = buildNodeIndex(context.graph);
+  const nodeById = buildNodeIndex<BaseNode>(context.graph.nodes);
   const battery = nodeById.get(context.batteryId);
   if (!battery) return diagnostics;
 
@@ -112,13 +91,13 @@ export const validateDcNegativeReturn = (context: DcNegativeReturnContext): Diag
     return diagnostics;
   }
 
-  const portByKey = buildPortIndex(context.graph, context.scenario);
+  const portByKey = buildEnabledPortIndex(context.graph.nodes, context.scenario);
   const negativeAdjacency = buildNegativeAdjacency(context.graph, context.scenario, portByKey);
   const reachableByNegative = reachableNodes(negativeAdjacency, context.batteryId);
   const loadIds = Array.from(new Set(context.connectedLoadIds)).sort();
 
   for (const loadId of loadIds) {
-    if (!isEnabled(loadId, context.scenario)) continue;
+    if (!isNodeEnabled(loadId, context.scenario)) continue;
     const load = nodeById.get(loadId);
     if (!load || load.type !== "load") continue;
     if (!hasConductorPort(load, POSITIVE_CONDUCTOR)) continue;

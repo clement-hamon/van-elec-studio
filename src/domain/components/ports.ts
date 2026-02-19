@@ -1,16 +1,8 @@
-import type { ComponentInstance, ComponentType, Port } from '~/types/schema'
-
-type ComponentPort = Port & { label?: string }
+import type { ComponentInstance, ComponentPort, ComponentType } from '~/types/schema'
 
 export const buildPortsFromType = (type: ComponentType | undefined): ComponentPort[] => {
   if (!type) return []
-  return type.ports.map((port) => ({
-    id: port.id,
-    domain: port.domain,
-    conductor: port.conductor,
-    dir: port.direction,
-    label: port.label,
-  }))
+  return type.ports.map((port) => ({ ...port }))
 }
 
 export const mergeComponentPortsWithType = (
@@ -28,7 +20,7 @@ export const mergeComponentPortsWithType = (
       id: portDef.id,
       domain: portDef.domain,
       conductor: portDef.conductor,
-      dir: portDef.direction,
+      dir: portDef.dir,
       label: portDef.label ?? existing?.label,
     }
   })

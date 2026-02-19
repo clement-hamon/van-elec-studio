@@ -45,8 +45,8 @@ export const componentRegistry: ComponentType[] = [
       fieldMaxDischargeCurrentA
     ],
     ports: [
-      { id: 'positive', label: '+', direction: 'bidirectional', domain: 'dc', conductor: 'POS' },
-      { id: 'negative', label: '-', direction: 'bidirectional', domain: 'dc', conductor: 'NEG' },
+      { id: 'positive', label: '+', dir: 'bidirectional', domain: 'dc', conductor: 'POS' },
+      { id: 'negative', label: '-', dir: 'bidirectional', domain: 'dc', conductor: 'NEG' },
     ],
   },
   {
@@ -58,8 +58,8 @@ export const componentRegistry: ComponentType[] = [
     defaultParams: { ratingA: 60 },
     fields: [fieldRatingA],
     ports: [
-      { id: 'in', label: 'In', direction: 'in', domain: 'dc', conductor: 'POS' },
-      { id: 'out', label: 'Out', direction: 'out', domain: 'dc', conductor: 'POS' },
+      { id: 'in', label: 'In', dir: 'in', domain: 'dc', conductor: 'POS' },
+      { id: 'out', label: 'Out', dir: 'out', domain: 'dc', conductor: 'POS' },
     ],
   },
   {
@@ -71,8 +71,8 @@ export const componentRegistry: ComponentType[] = [
     defaultParams: { ratingA: 20 },
     fields: [fieldRatingA],
     ports: [
-      { id: 'in', label: 'In', direction: 'in', domain: 'dc', conductor: 'POS' },
-      { id: 'out', label: 'Out', direction: 'out', domain: 'dc', conductor: 'POS' },
+      { id: 'in', label: 'In', dir: 'in', domain: 'dc', conductor: 'POS' },
+      { id: 'out', label: 'Out', dir: 'out', domain: 'dc', conductor: 'POS' },
     ],
   },
   {
@@ -84,8 +84,8 @@ export const componentRegistry: ComponentType[] = [
     defaultParams: { maxOutW: 1000, maxInputV: 15, outputV: 230, efficiency: 0.9 },
     fields: [fieldMaxOutputW, fieldMaxInputVoltage, fieldOutputVoltage, fieldEfficiency],
     ports: [
-      { id: 'dc-in', label: 'DC In', direction: 'in', domain: 'dc', conductor: 'POS' },
-      { id: 'ac-out', label: 'AC Out', direction: 'out', domain: 'ac', conductor: 'L' },
+      { id: 'dc-in', label: 'DC In', dir: 'in', domain: 'dc', conductor: 'POS' },
+      { id: 'ac-out', label: 'AC Out', dir: 'out', domain: 'ac', conductor: 'L' },
     ],
   },
   {
@@ -97,8 +97,8 @@ export const componentRegistry: ComponentType[] = [
     defaultParams: { watts: 6, dutyCycle: 1, lumens: 500 },
     fields: [fieldWatt, fieldDutyCycle, fieldLumens],
     ports: [
-      { id: 'dc-in', label: 'DC +', direction: 'in', domain: 'dc', conductor: 'POS' },
-      { id: 'dc-neg', label: 'DC -', direction: 'out', domain: 'dc', conductor: 'NEG' },
+      { id: 'dc-in', label: 'DC +', dir: 'in', domain: 'dc', conductor: 'POS' },
+      { id: 'dc-neg', label: 'DC -', dir: 'out', domain: 'dc', conductor: 'NEG' },
     ],
   },
   {
@@ -110,8 +110,8 @@ export const componentRegistry: ComponentType[] = [
     defaultParams: { watts: 36, dutyCycle: 1, lumens: 3000 },
     fields: [fieldWatt, fieldDutyCycle, fieldLumens],
     ports: [
-      { id: 'dc-in', label: 'DC +', direction: 'in', domain: 'dc', conductor: 'POS' },
-      { id: 'dc-neg', label: 'DC -', direction: 'out', domain: 'dc', conductor: 'NEG' },
+      { id: 'dc-in', label: 'DC +', dir: 'in', domain: 'dc', conductor: 'POS' },
+      { id: 'dc-neg', label: 'DC -', dir: 'out', domain: 'dc', conductor: 'NEG' },
     ],
   },
   {
@@ -123,8 +123,8 @@ export const componentRegistry: ComponentType[] = [
     defaultParams: { watts: 50, dutyCycle: 1 },
     fields: [fieldWatt, fieldDutyCycle],
     ports: [
-      { id: 'dc-in', label: 'DC +', direction: 'in', domain: 'dc', conductor: 'POS' },
-      { id: 'dc-neg', label: 'DC -', direction: 'out', domain: 'dc', conductor: 'NEG' },
+      { id: 'dc-in', label: 'DC +', dir: 'in', domain: 'dc', conductor: 'POS' },
+      { id: 'dc-neg', label: 'DC -', dir: 'out', domain: 'dc', conductor: 'NEG' },
     ],
   },
   {
@@ -136,8 +136,8 @@ export const componentRegistry: ComponentType[] = [
     defaultParams: { watts: 60, dutyCycle: 1 },
     fields: [fieldWatt, fieldDutyCycle],
     ports: [
-      { id: 'dc-in', label: 'DC +', direction: 'in', domain: 'dc', conductor: 'POS' },
-      { id: 'dc-neg', label: 'DC -', direction: 'out', domain: 'dc', conductor: 'NEG' },
+      { id: 'dc-in', label: 'DC +', dir: 'in', domain: 'dc', conductor: 'POS' },
+      { id: 'dc-neg', label: 'DC -', dir: 'out', domain: 'dc', conductor: 'NEG' },
     ],
   },
   {
@@ -149,8 +149,8 @@ export const componentRegistry: ComponentType[] = [
     defaultParams: { watts: 50, dutyCycle: 1 },
     fields: [fieldWatt, fieldCurrentA, fieldDutyCycle],
     ports: [
-      { id: 'dc-in', label: 'DC +', direction: 'in', domain: 'dc', conductor: 'POS' },
-      { id: 'dc-neg', label: 'DC -', direction: 'out', domain: 'dc', conductor: 'NEG' },
+      { id: 'dc-in', label: 'DC +', dir: 'in', domain: 'dc', conductor: 'POS' },
+      { id: 'dc-neg', label: 'DC -', dir: 'out', domain: 'dc', conductor: 'NEG' },
     ],
   },
   {
@@ -162,11 +162,11 @@ export const componentRegistry: ComponentType[] = [
     defaultParams: { ratingA: 100, maxBranches: 4 },
     fields: [fieldRatingA, fieldMaxBranches],
     ports: [
-      { id: 'in', label: 'In', direction: 'in', domain: 'dc', conductor: 'POS' },
-      { id: 'out-1', label: 'Out 1', direction: 'out', domain: 'dc', conductor: 'POS' },
-      { id: 'out-2', label: 'Out 2', direction: 'out', domain: 'dc', conductor: 'POS' },
-      { id: 'out-3', label: 'Out 3', direction: 'out', domain: 'dc', conductor: 'POS' },
-      { id: 'out-4', label: 'Out 4', direction: 'out', domain: 'dc', conductor: 'POS' },
+      { id: 'in', label: 'In', dir: 'in', domain: 'dc', conductor: 'POS' },
+      { id: 'out-1', label: 'Out 1', dir: 'out', domain: 'dc', conductor: 'POS' },
+      { id: 'out-2', label: 'Out 2', dir: 'out', domain: 'dc', conductor: 'POS' },
+      { id: 'out-3', label: 'Out 3', dir: 'out', domain: 'dc', conductor: 'POS' },
+      { id: 'out-4', label: 'Out 4', dir: 'out', domain: 'dc', conductor: 'POS' },
     ],
   },
   {
@@ -178,11 +178,11 @@ export const componentRegistry: ComponentType[] = [
     defaultParams: { ratingA: 100, maxBranches: 4 },
     fields: [fieldRatingA, fieldMaxBranches],
     ports: [
-      { id: 'in', label: 'In', direction: 'in', domain: 'dc', conductor: 'NEG' },
-      { id: 'out-1', label: 'Out 1', direction: 'out', domain: 'dc', conductor: 'NEG' },
-      { id: 'out-2', label: 'Out 2', direction: 'out', domain: 'dc', conductor: 'NEG' },
-      { id: 'out-3', label: 'Out 3', direction: 'out', domain: 'dc', conductor: 'NEG' },
-      { id: 'out-4', label: 'Out 4', direction: 'out', domain: 'dc', conductor: 'NEG' },
+      { id: 'in', label: 'In', dir: 'in', domain: 'dc', conductor: 'NEG' },
+      { id: 'out-1', label: 'Out 1', dir: 'out', domain: 'dc', conductor: 'NEG' },
+      { id: 'out-2', label: 'Out 2', dir: 'out', domain: 'dc', conductor: 'NEG' },
+      { id: 'out-3', label: 'Out 3', dir: 'out', domain: 'dc', conductor: 'NEG' },
+      { id: 'out-4', label: 'Out 4', dir: 'out', domain: 'dc', conductor: 'NEG' },
     ],
   },
   {
@@ -193,7 +193,7 @@ export const componentRegistry: ComponentType[] = [
     type: 'source',
     defaultParams: { availableW: 200, outputV: 18 },
     fields: [fieldAvailableW, fieldOutputVoltage],
-    ports: [{ id: 'dc-out', label: 'DC Out', direction: 'out', domain: 'dc', conductor: 'POS' }],
+    ports: [{ id: 'dc-out', label: 'DC Out', dir: 'out', domain: 'dc', conductor: 'POS' }],
   },
   {
     id: 'charge-controller',
@@ -210,8 +210,8 @@ export const componentRegistry: ComponentType[] = [
       fieldEfficiency
     ],
     ports: [
-      { id: 'dc-in', label: 'DC In', direction: 'in', domain: 'dc', conductor: 'POS' },
-      { id: 'dc-out', label: 'DC Out', direction: 'out', domain: 'dc', conductor: 'POS' },
+      { id: 'dc-in', label: 'DC In', dir: 'in', domain: 'dc', conductor: 'POS' },
+      { id: 'dc-out', label: 'DC Out', dir: 'out', domain: 'dc', conductor: 'POS' },
     ],
   },
   {
@@ -222,7 +222,7 @@ export const componentRegistry: ComponentType[] = [
     type: 'source',
     defaultParams: { maxOutA: 120, outputV: 14.4 },
     fields: [fieldMaxOutputCurrentA, fieldOutputVoltage],
-    ports: [{ id: 'dc-out', label: 'DC Out', direction: 'out', domain: 'dc', conductor: 'POS' }],
+    ports: [{ id: 'dc-out', label: 'DC Out', dir: 'out', domain: 'dc', conductor: 'POS' }],
   },
   {
     id: 'dc-dc-charger',
@@ -233,8 +233,8 @@ export const componentRegistry: ComponentType[] = [
     defaultParams: { maxOutA: 40, maxInputV: 32, outputV: 14.4, efficiency: 0.9 },
     fields: [fieldMaxInputVoltage, fieldOutputVoltage, fieldMaxOutputCurrentA, fieldEfficiency],
     ports: [
-      { id: 'dc-in', label: 'DC In', direction: 'in', domain: 'dc', conductor: 'POS' },
-      { id: 'dc-out', label: 'DC Out', direction: 'out', domain: 'dc', conductor: 'POS' },
+      { id: 'dc-in', label: 'DC In', dir: 'in', domain: 'dc', conductor: 'POS' },
+      { id: 'dc-out', label: 'DC Out', dir: 'out', domain: 'dc', conductor: 'POS' },
     ],
   },
   {
@@ -245,7 +245,7 @@ export const componentRegistry: ComponentType[] = [
     type: 'source',
     defaultParams: { availableW: 2000, outputV: 230 },
     fields: [fieldAvailableW, fieldOutputVoltage],
-    ports: [{ id: 'ac-out', label: 'AC Out', direction: 'out', domain: 'ac', conductor: 'L' }],
+    ports: [{ id: 'ac-out', label: 'AC Out', dir: 'out', domain: 'ac', conductor: 'L' }],
   },
   {
     id: 'ac-dc-charger',
@@ -256,8 +256,8 @@ export const componentRegistry: ComponentType[] = [
     defaultParams: { maxOutA: 40, maxInputV: 265, outputV: 14.4, efficiency: 0.9 },
     fields: [fieldMaxInputVoltage, fieldOutputVoltage, fieldMaxOutputCurrentA, fieldEfficiency],
     ports: [
-      { id: 'ac-in', label: 'AC In', direction: 'in', domain: 'ac', conductor: 'L' },
-      { id: 'dc-out', label: 'DC Out', direction: 'out', domain: 'dc', conductor: 'POS' },
+      { id: 'ac-in', label: 'AC In', dir: 'in', domain: 'ac', conductor: 'L' },
+      { id: 'dc-out', label: 'DC Out', dir: 'out', domain: 'dc', conductor: 'POS' },
     ],
   },
 ]

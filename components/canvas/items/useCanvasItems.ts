@@ -1,6 +1,7 @@
 import type { Ref } from 'vue'
 import type Konva from 'konva'
 import type { useSchemaStore } from '~/stores/schema'
+import type { ComponentInstance } from '~/types/schema'
 import type { CanvasMode } from './constants'
 import type { CableConductorChoice } from './useCablePortResolver'
 import { useCanvasCables } from './useCanvasCables'
@@ -12,8 +13,8 @@ type CanvasItemsOptions = {
   getMode: () => CanvasMode
   pendingSourceId: Ref<string | null>
   onRequestCableConductor?: (payload: {
-    sourceId: string
-    targetId: string
+    source: ComponentInstance
+    target: ComponentInstance
     availableConductors: CableConductorChoice[]
   }) => Promise<CableConductorChoice | null>
 }
@@ -31,14 +32,7 @@ export const useCanvasItems = ({
     schemaStore,
     getMode,
     pendingSourceId,
-    onRequestCableConductor: onRequestCableConductor
-      ? ({ source, target, availableConductors }) =>
-          onRequestCableConductor({
-            sourceId: source.id,
-            targetId: target.id,
-            availableConductors,
-          })
-      : undefined,
+    onRequestCableConductor,
     onRequestSyncCables: () => cables.syncCableLines(nodes.getNodeCenter),
   })
 
