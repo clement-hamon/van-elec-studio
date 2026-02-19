@@ -152,8 +152,12 @@ class FlowEngine {
     const fuseCheck = new FuseCheckVisitor<FlowEdge>(nodes, powerBalance.injectionsW);
     const edgeCurrent = new EdgeCurrentVisitor<FlowEdge>(
       fuseCheck.subtreeW,
+      fuseCheck.preProtectionSubtreeW,
+      powerBalance.sizingDemandSubtreeW,
+      powerBalance.sizingSupplySubtreeW,
       fuseCheck.blockedNodes,
       fuseCheck.blownEdges,
+      this.scenario.currentComputationMode ?? "load_simulation",
     );
     const voltageCompatibility = new VoltageCompatibilityVisitor<FlowEdge>(nodes);
 

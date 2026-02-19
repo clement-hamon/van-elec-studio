@@ -9,6 +9,7 @@ import type { FlowOutput, ScenarioInput, Port,
   Cable,
   CableDerived,
   CableWire,
+  CurrentComputationMode,
   ComponentInstance,
   ComponentType,
   Issue,
@@ -23,9 +24,20 @@ const makeId = (prefix: string) => `${prefix}-${Date.now()}-${Math.floor(Math.ra
 const defaultScenario = (): ScenarioInput => ({
   enabledNodes: {},
   dcNegativeMode: 'warn',
+  currentComputationMode: 'load_simulation',
   dispatchPolicy: 'priority_order',
   sourcePriority: [],
 })
+
+const normalizeScenario = (scenario?: ScenarioInput): ScenarioInput => {
+  const defaults = defaultScenario()
+  return {
+    ...defaults,
+    ...scenario,
+    enabledNodes: scenario?.enabledNodes ?? defaults.enabledNodes,
+    sourcePriority: scenario?.sourcePriority ?? defaults.sourcePriority,
+  }
+}
 
 const emptyDerived: CableDerived = {
   ampacityA: 0,
@@ -58,7 +70,7 @@ const normalizeSchema = (schema: SchemaState, registry: ComponentType[]): Schema
           ? component.imageScaleRatio
           : defaultImageScaleRatio(component.typeId),
     })),
-    scenario: schema.scenario ?? defaultScenario(),
+    scenario: normalizeScenario(schema.scenario),
     updatedAt: schema.updatedAt ?? nowIso(),
   }
 }
@@ -104,7 +116,7 @@ const applyDerivedAll = (
   registry: ComponentType[],
 ): { schema: SchemaState; flow: FlowOutput | null } => {
   const normalized = normalizeSchema(schema, registry)
-  const scenario = normalized.scenario ?? defaultScenario()
+  const scenario = normalizeScenario(normalized.scenario)
   let flow: FlowOutput | null = null
 
   try {
@@ -287,13 +299,19 @@ export const useSchemaStore = defineStore('schema', {
       return true
     },
     setComponentEnabled(id: string, enabled: boolean) {
-      const scenario = this.schema.scenario ?? defaultScenario()
+      const scenario = normalizeScenario(this.schema.scenario)
       const existing = scenario.enabledNodes ?? {}
       const enabledNodes = enabled
         ? Object.fromEntries(Object.entries(existing).filter(([key]) => key !== id))
         : { ...existing, [id]: false }
 
       this.schema.scenario = { ...scenario, enabledNodes }
+      this.schema.updatedAt = nowIso()
+      this.refreshValidation()
+    },
+    setCurrentComputationMode(mode: CurrentComputationMode) {
+      const scenario = normalizeScenario(this.schema.scenario)
+      this.schema.scenario = { ...scenario, currentComputationMode: mode }
       this.schema.updatedAt = nowIso()
       this.refreshValidation()
     },

@@ -49,6 +49,8 @@ export class FuseCheckVisitor<E extends FuseEdge> implements TreeVisitor<E> {
 
   /** Subtree power sum per node (mutated when fuses blow) */
   readonly subtreeW = new Map<string, number>();
+  /** Subtree power sum before opening protections. */
+  readonly preProtectionSubtreeW = new Map<string, number>();
 
   /** Nodes in each node's subtree */
   private readonly subtreeMembers = new Map<string, Set<string>>();
@@ -102,6 +104,7 @@ export class FuseCheckVisitor<E extends FuseEdge> implements TreeVisitor<E> {
         : DEFAULT_DOMAIN_VOLTAGE;
     // Fuse ratings are current-based, so we convert subtree power to edge current locally.
     const currentA = Math.abs(sumW) / edgeVoltageV;
+    this.preProtectionSubtreeW.set(nodeId, sumW);
 
     if (parentEdge && fuseA && currentA > fuseA + 1e-6) {
       this.blownEdges.add(parentEdge.id);

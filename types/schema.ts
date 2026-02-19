@@ -157,6 +157,7 @@ export interface GraphInput {
 }
 
 export type DcNegativeMode = "off" | "warn" | "enforce";
+export type CurrentComputationMode = "load_simulation" | "cable_sizing";
 
 /** Scenario toggles and assumptions */
 export interface ScenarioInput {
@@ -168,6 +169,9 @@ export interface ScenarioInput {
 
   // DC negative-return path validation mode.
   dcNegativeMode?: DcNegativeMode;
+
+  // Current calculation strategy used for cable metrics.
+  currentComputationMode?: CurrentComputationMode;
 
   // Multi-source dispatch
   dispatchPolicy?: "priority_order" | "share_proportionally";

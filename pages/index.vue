@@ -26,6 +26,13 @@
                 </option>
               </select>
           </div>
+          <div class="calculation-mode">
+            <label class="calculation-mode__label" for="calculation-mode">Current basis</label>
+            <select id="calculation-mode" v-model="currentComputationMode" class="calculation-mode__select">
+              <option value="load_simulation">Load simulation</option>
+              <option value="cable_sizing">Cable sizing</option>
+            </select>
+          </div>
         </div>
       </div>
       <div class="panel-body">
@@ -53,6 +60,12 @@ const showSchemaSummary = computed(() => !selectedComponent.value && !selectedCa
 const schemaCables = computed(() => schemaStore.schema.cables)
 const isAddMenuOpen = ref(false)
 const selectedTypeId = ref('')
+const currentComputationMode = computed({
+  get: () => schemaStore.schema.scenario?.currentComputationMode ?? 'load_simulation',
+  set: (value: 'load_simulation' | 'cable_sizing') => {
+    schemaStore.setCurrentComputationMode(value)
+  },
+})
 
 const inspectorTitle = computed(() => {
   if (selectedComponent.value) {
@@ -76,3 +89,31 @@ const onAddSelected = () => {
   isAddMenuOpen.value = false
 }
 </script>
+
+<style scoped>
+.calculation-mode {
+  display: grid;
+  gap: 6px;
+}
+
+.calculation-mode__label {
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #6a635c;
+}
+
+.calculation-mode__select {
+  border: 1px solid rgba(45, 42, 37, 0.18);
+  border-radius: 12px;
+  padding: 10px 12px;
+  font-weight: 500;
+  background: #fff;
+  color: #2d2a25;
+}
+
+.inspector-header {
+  display: grid;
+  gap: 10px;
+}
+</style>

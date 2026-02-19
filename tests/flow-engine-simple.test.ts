@@ -49,6 +49,88 @@ describe("flow-engine", () => {
     expect(result.edges.e3?.currentA).toBeCloseTo(3);
   });
 
+  it("sizes cable current from load demand envelope, not wire ampacity", () => {
+    const input: FlowInput = {
+      graph: {
+        nodes: [
+          {
+            id: "bat",
+            type: "battery",
+            ports: [{ id: "p+", domain: "DC_12V", conductor: "POS", dir: "bidirectional" }],
+            params: { maxDischargeA: 120, nominalV: 12 }
+          },
+          {
+            id: "fuse",
+            type: "distribution",
+            ports: [{ id: "in", domain: "DC_12V", conductor: "POS", dir: "in" }],
+            params: { ratingA: 40 }
+          },
+          {
+            id: "load",
+            type: "load",
+            ports: [{ id: "in", domain: "DC_12V", conductor: "POS", dir: "in" }],
+            params: { watts: 60 }
+          }
+        ],
+        edges: [
+          {
+            id: "e1",
+            from: { nodeId: "bat", portId: "p+" },
+            to: { nodeId: "fuse", portId: "in" },
+            wire: { maxA: 50 },
+            protection: { fuseA: 40 }
+          },
+          { id: "e2", from: { nodeId: "fuse", portId: "in" }, to: { nodeId: "load", portId: "in" }, wire: { maxA: 25 } }
+        ]
+      },
+      scenario: {
+        currentComputationMode: "cable_sizing"
+      }
+    };
+
+    const result = computeFlow(input);
+
+    expect(result.status).toBe("ok");
+    expect(result.edges.e1?.currentA).toBeCloseTo(5);
+    expect(result.edges.e2?.currentA).toBeCloseTo(5);
+    expect(result.edges.e1?.limitedBy).toEqual(["load.maxDemandA"]);
+    expect(result.edges.e2?.limitedBy).toEqual(["load.maxDemandA"]);
+  });
+
+  it("sizes cable current from charger/source max delivery envelope", () => {
+    const input: FlowInput = {
+      graph: {
+        nodes: [
+          {
+            id: "bat",
+            type: "battery",
+            ports: [{ id: "p+", domain: "DC_12V", conductor: "POS", dir: "bidirectional" }],
+            params: { maxDischargeA: 120, nominalV: 12 }
+          },
+          {
+            id: "alt",
+            type: "source",
+            ports: [{ id: "out", domain: "DC_12V", conductor: "POS", dir: "out" }],
+            params: { maxOutA: 40 }
+          }
+        ],
+        edges: [
+          { id: "e1", from: { nodeId: "alt", portId: "out" }, to: { nodeId: "bat", portId: "p+" }, wire: { maxA: 10 } }
+        ]
+      },
+      scenario: {
+        currentComputationMode: "cable_sizing",
+        domainVoltage: { DC_12V: 12 }
+      }
+    };
+
+    const result = computeFlow(input);
+
+    expect(result.status).toBe("ok");
+    expect(result.edges.e1?.currentA).toBeCloseTo(40);
+    expect(result.edges.e1?.limitedBy).toEqual(["source.maxSupplyA"]);
+  });
+
   it("clamps battery discharge when overloaded", () => {
     const input: FlowInput = {
       graph: {

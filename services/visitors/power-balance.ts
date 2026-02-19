@@ -48,6 +48,9 @@ export class PowerBalanceVisitor<E extends PowerEdge> implements TreeVisitor<E> 
    * comparable across voltage domains after efficiency is applied.
    */
   readonly injectionsW = new Map<string, number>();
+  // Sizing envelopes: max possible demand/supply power crossing the parent edge.
+  readonly sizingDemandSubtreeW = new Map<string, number>();
+  readonly sizingSupplySubtreeW = new Map<string, number>();
   totalDemandW = 0;
   totalSupplyW = 0;
   hasUnserved = false;
@@ -207,6 +210,29 @@ export class PowerBalanceVisitor<E extends PowerEdge> implements TreeVisitor<E> 
 
     this.hasUnserved = servedFactor < 1;
     this.totalSupplyW = usedSupplyW + Math.max(0, -batteryNetA * batteryVoltageV);
+    this.computeSizingEnvelopes();
+  }
+
+  private computeSizingEnvelopes() {
+    for (const nodeId of this.tree.postorder) {
+      const node = this.nodes.find((n) => n.id === nodeId);
+      if (!node) continue;
+
+      let demandW = this.demandByNode.get(nodeId) ?? 0;
+      let supplyW = this.supplyCapByNode.get(nodeId) ?? 0;
+
+      for (const childId of this.tree.children.get(nodeId) ?? []) {
+        demandW += this.sizingDemandSubtreeW.get(childId) ?? 0;
+        supplyW += this.sizingSupplySubtreeW.get(childId) ?? 0;
+      }
+
+      const policy = policyForNode(node);
+      const upstreamDemandW = policy.transformSubtreeW(node, demandW);
+      const upstreamSupplyW = Math.abs(policy.transformSubtreeW(node, -supplyW));
+
+      this.sizingDemandSubtreeW.set(nodeId, Math.max(0, upstreamDemandW));
+      this.sizingSupplySubtreeW.set(nodeId, Math.max(0, upstreamSupplyW));
+    }
   }
 
   diagnostics() {
