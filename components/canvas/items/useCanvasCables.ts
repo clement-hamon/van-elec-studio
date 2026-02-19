@@ -32,6 +32,14 @@ const POSITIVE_CABLE_COLOR = '#e64141ff'
 const NEGATIVE_CABLE_COLOR = '#3a84d9'
 const IDLE_CABLE_COLOR = '#c9b8a6'
 
+// Warning dash animation constants
+const WARNING_DASH_COLOR_CAUTION = CABLE_FLOW_BG // amber, utilization 0.8–1.0
+const WARNING_DASH_COLOR_DANGER = CABLE_FLOW_BG   // red, utilization ≥ 1.0 or limited
+const WARNING_DASH_PATTERN_CAUTION = [12, 14]
+const WARNING_DASH_PATTERN_DANGER = [8, 10]
+const WARNING_DASH_SPEED_CAUTION = 0.3  // px per frame
+const WARNING_DASH_SPEED_DANGER = 0.7   // px per frame
+
 const cableConductor = (cable: Cable, schemaStore: ReturnType<typeof useSchemaStore>) => {
   const fromComponent = schemaStore.schema.components.find((component) => component.id === cable.from.nodeId)
   const toComponent = schemaStore.schema.components.find((component) => component.id === cable.to.nodeId)
@@ -145,6 +153,36 @@ export const useCanvasCables = ({ layer, schemaStore }: CanvasCablesOptions) => 
   const cableGaugeMap = new Map<string, Konva.Group>()
   const cableFlowMap = new Map<string, Konva.Group>()
 
+  // Warning dash animation state
+  let warningAnimFrame: number | null = null
+  const startWarningAnimation = () => {
+    if (warningAnimFrame !== null) return
+    const animate = () => {
+      let hasWarning = false
+      lineMap.forEach((line) => {
+        const level = (line.getAttr('warningLevel') as number | undefined) ?? 0
+        if (level <= 0) return
+        hasWarning = true
+        const speed = level >= 2 ? WARNING_DASH_SPEED_DANGER : WARNING_DASH_SPEED_CAUTION
+        const current = (line.getAttr('warningDashOffset') as number | undefined) ?? 0
+        line.setAttr('warningDashOffset', current + speed)
+      })
+      if (hasWarning) {
+        layer.batchDraw()
+        warningAnimFrame = requestAnimationFrame(animate)
+      } else {
+        warningAnimFrame = null
+      }
+    }
+    warningAnimFrame = requestAnimationFrame(animate)
+  }
+  const stopWarningAnimation = () => {
+    if (warningAnimFrame !== null) {
+      cancelAnimationFrame(warningAnimFrame)
+      warningAnimFrame = null
+    }
+  }
+
   const ensureCableBadge = (cableId: string) => {
     const existing = cableBadgeMap.get(cableId)
     if (existing) return existing
@@ -256,8 +294,31 @@ export const useCanvasCables = ({ layer, schemaStore }: CanvasCablesOptions) => 
 
         const cornerRadius = (shape.getAttr('cornerRadius') as number | undefined) ?? 0
 
+        // Draw the base cable stroke
         drawRoundedPath(context, points, cornerRadius)
         context.strokeShape(shape)
+
+        // Draw animated warning dash overlay
+        const warningLevel = (shape.getAttr('warningLevel') as number | undefined) ?? 0
+        if (warningLevel > 0) {
+          const ctx = context._context
+          ctx.save()
+
+          const isDanger = warningLevel >= 2
+          const dashColor = isDanger ? WARNING_DASH_COLOR_DANGER : WARNING_DASH_COLOR_CAUTION
+          const dashPattern = isDanger ? WARNING_DASH_PATTERN_DANGER : WARNING_DASH_PATTERN_CAUTION
+          const dashOffset = (shape.getAttr('warningDashOffset') as number | undefined) ?? 0
+
+          ctx.setLineDash(dashPattern)
+          ctx.lineDashOffset = -dashOffset
+          ctx.strokeStyle = dashColor
+          ctx.lineWidth = shape.strokeWidth()
+
+          drawRoundedPath(context, points, cornerRadius)
+          ctx.stroke()
+
+          ctx.restore()
+        }
       },
     })
 
@@ -437,12 +498,19 @@ export const useCanvasCables = ({ layer, schemaStore }: CanvasCablesOptions) => 
       let stroke = baseCableColor(cable, schemaStore)
       if (!isNegativeCable) {
         if (limited || utilization >= 1) {
-          stroke = '#d96b3a'
+          stroke = '#e64141ff'
+          line.setAttr('warningLevel', 2)
         } else if (utilization >= 0.8) {
           stroke = '#f2b46d'
+          line.setAttr('warningLevel', 1)
         } else if (magnitude < 0.01) {
           stroke = IDLE_CABLE_COLOR
+          line.setAttr('warningLevel', 0)
+        } else {
+          line.setAttr('warningLevel', 0)
         }
+      } else {
+        line.setAttr('warningLevel', 0)
       }
       if (isSelected) {
         stroke = '#2d2a25'
@@ -457,6 +525,17 @@ export const useCanvasCables = ({ layer, schemaStore }: CanvasCablesOptions) => 
       line.opacity(disabled ? 0.35 : 1)
       label?.opacity(disabled ? 0.35 : 1)
     })
+
+    // Start or stop the warning dash animation based on whether any cable has a warning
+    let anyWarning = false
+    lineMap.forEach((line) => {
+      if (((line.getAttr('warningLevel') as number | undefined) ?? 0) > 0) anyWarning = true
+    })
+    if (anyWarning) {
+      startWarningAnimation()
+    } else {
+      stopWarningAnimation()
+    }
   }
 
   return {
