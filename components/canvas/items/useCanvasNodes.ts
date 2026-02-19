@@ -4,7 +4,7 @@ import type { useSchemaStore } from '~/stores/schema'
 import type { ComponentInstance } from '~/types/schema'
 import { estimateAmpacityForAwg } from '~/services/cable'
 import { NODE_HEIGHT, NODE_SCALE, NODE_WIDTH, type CanvasMode } from './constants'
-import { useCablePortResolver } from './useCablePortResolver'
+import { useCablePortResolver, type CableConductorChoice } from './useCablePortResolver'
 
 type CanvasNodesOptions = {
   layer: Konva.Layer
@@ -12,6 +12,11 @@ type CanvasNodesOptions = {
   getMode: () => CanvasMode
   pendingSourceId: Ref<string | null>
   onRequestSyncCables: () => void
+  onRequestCableConductor?: (payload: {
+    source: ComponentInstance
+    target: ComponentInstance
+    availableConductors: CableConductorChoice[]
+  }) => Promise<CableConductorChoice | null>
 }
 
 const getAssetPath = (path: string, baseURL: string) => {
@@ -58,6 +63,7 @@ const iconUrlForComponent = (component: ComponentInstance, baseURL: string) => {
   if (component.typeId === 'alternator') return getPath('/icons/alternator.svg')
   if (component.typeId === 'battery') return getPath('/icons/battery.svg')
   if (component.typeId === 'dc-bus') return getPath('/icons/positive-bus-bar.svg')
+  if (component.typeId === 'dc-neg-bus') return getPath('/icons/negative-bus-bar.svg')
   if (component.typeId === 'shore-inlet') return getPath('/icons/shore-inlet.svg')
   if (component.typeId === 'solar-panel') return getPath('/icons/solar-panel.svg')
   if (component.typeId === 'fuse') return getPath('/icons/fuse.svg')
@@ -89,11 +95,12 @@ export const useCanvasNodes = ({
   getMode,
   pendingSourceId,
   onRequestSyncCables,
+  onRequestCableConductor,
 }: CanvasNodesOptions) => {
   const config = useRuntimeConfig()
   const baseURL = config.app.baseURL
   const nodeMap = new Map<string, Konva.Group>()
-  const { resolvePreferredEndpoints } = useCablePortResolver()
+  const { resolvePreferredEndpoints, resolveAvailableConductors } = useCablePortResolver()
 
   const getNodeCenter = (nodeId: string) => {
     const node = nodeMap.get(nodeId)
@@ -196,20 +203,22 @@ export const useCanvasNodes = ({
     componentGroup.add(flowText)
     componentGroup.setAttr('iconUrl', iconUrl)
 
-    const connectionExists = (sourceId: string, targetId: string) =>
-      schemaStore.schema.cables.some(
-        (cable) =>
-          (cable.from.nodeId === sourceId && cable.to.nodeId === targetId) ||
-          (cable.from.nodeId === targetId && cable.to.nodeId === sourceId),
-      )
-
-    const createCable = (firstId: string, secondId: string) => {
-      if (connectionExists(firstId, secondId)) return null
+    const createCable = async (firstId: string, secondId: string) => {
       const first = schemaStore.schema.components.find((component) => component.id === firstId)
       const second = schemaStore.schema.components.find((component) => component.id === secondId)
       if (!first || !second) return null
 
-      const endpoints = resolvePreferredEndpoints(first, second)
+      const availableConductors = resolveAvailableConductors(first, second, schemaStore.schema.cables)
+      let selectedConductor: CableConductorChoice | undefined
+
+      if (availableConductors.length > 0) {
+        selectedConductor = onRequestCableConductor
+          ? await onRequestCableConductor({ source: first, target: second, availableConductors }) ?? undefined
+          : availableConductors[0]
+        if (!selectedConductor) return null
+      }
+
+      const endpoints = resolvePreferredEndpoints(first, second, schemaStore.schema.cables, selectedConductor)
       if (!endpoints) return null
 
       const newCableId = `cable-${Date.now()}`
@@ -233,11 +242,11 @@ export const useCanvasNodes = ({
       return newCableId
     }
 
-    const handleNodeClick = (event: Konva.KonvaEventObject<MouseEvent>) => {
+    const handleNodeClick = async (event: Konva.KonvaEventObject<MouseEvent>) => {
       if (event.evt?.shiftKey) {
         const selectedId = schemaStore.schema.selection.componentId
         if (selectedId && selectedId !== componentId) {
-          const newCableId = createCable(selectedId, componentId)
+          const newCableId = await createCable(selectedId, componentId)
           if (newCableId) {
             schemaStore.setSelection({ cableId: newCableId })
           }
@@ -256,7 +265,7 @@ export const useCanvasNodes = ({
           return
         }
 
-        const newCableId = createCable(pendingSourceId.value, componentId)
+        const newCableId = await createCable(pendingSourceId.value, componentId)
         if (newCableId) {
           schemaStore.setSelection({ cableId: newCableId })
         }
@@ -269,7 +278,7 @@ export const useCanvasNodes = ({
 
     componentGroup.on('click tap', (event) => {
       event.cancelBubble = true
-      handleNodeClick(event)
+      void handleNodeClick(event)
     })
 
     componentGroup.on('dragmove', () => {

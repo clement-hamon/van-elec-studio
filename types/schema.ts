@@ -156,6 +156,8 @@ export interface GraphInput {
   edges: Edge[];
 }
 
+export type DcNegativeMode = "off" | "warn" | "enforce";
+
 /** Scenario toggles and assumptions */
 export interface ScenarioInput {
   // enable/disable nodes (loads/sources/converters)
@@ -163,6 +165,9 @@ export interface ScenarioInput {
 
   // Domain nominal voltages used for W<->A conversions
   domainVoltage?: Partial<Record<Domain, number>>;
+
+  // DC negative-return path validation mode.
+  dcNegativeMode?: DcNegativeMode;
 
   // Multi-source dispatch
   dispatchPolicy?: "priority_order" | "share_proportionally";

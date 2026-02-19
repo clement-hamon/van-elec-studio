@@ -96,7 +96,10 @@ export const componentRegistry: ComponentType[] = [
     type: 'load',
     defaultParams: { watts: 6, dutyCycle: 1, lumens: 500 },
     fields: [fieldWatt, fieldDutyCycle, fieldLumens],
-    ports: [{ id: 'dc-in', label: 'DC In', direction: 'in', domain: 'dc', conductor: 'POS' }],
+    ports: [
+      { id: 'dc-in', label: 'DC +', direction: 'in', domain: 'dc', conductor: 'POS' },
+      { id: 'dc-neg', label: 'DC -', direction: 'out', domain: 'dc', conductor: 'NEG' },
+    ],
   },
   {
     id: 'light-bar',
@@ -106,7 +109,10 @@ export const componentRegistry: ComponentType[] = [
     type: 'load',
     defaultParams: { watts: 36, dutyCycle: 1, lumens: 3000 },
     fields: [fieldWatt, fieldDutyCycle, fieldLumens],
-    ports: [{ id: 'dc-in', label: 'DC In', direction: 'in', domain: 'dc', conductor: 'POS' }],
+    ports: [
+      { id: 'dc-in', label: 'DC +', direction: 'in', domain: 'dc', conductor: 'POS' },
+      { id: 'dc-neg', label: 'DC -', direction: 'out', domain: 'dc', conductor: 'NEG' },
+    ],
   },
   {
     id: 'fridge-12v',
@@ -116,7 +122,10 @@ export const componentRegistry: ComponentType[] = [
     type: 'load',
     defaultParams: { watts: 50, dutyCycle: 1 },
     fields: [fieldWatt, fieldDutyCycle],
-    ports: [{ id: 'dc-in', label: 'DC In', direction: 'in', domain: 'dc', conductor: 'POS' }],
+    ports: [
+      { id: 'dc-in', label: 'DC +', direction: 'in', domain: 'dc', conductor: 'POS' },
+      { id: 'dc-neg', label: 'DC -', direction: 'out', domain: 'dc', conductor: 'NEG' },
+    ],
   },
   {
     id: 'tv',
@@ -126,7 +135,10 @@ export const componentRegistry: ComponentType[] = [
     type: 'load',
     defaultParams: { watts: 60, dutyCycle: 1 },
     fields: [fieldWatt, fieldDutyCycle],
-    ports: [{ id: 'dc-in', label: 'DC In', direction: 'in', domain: 'dc', conductor: 'POS' }],
+    ports: [
+      { id: 'dc-in', label: 'DC +', direction: 'in', domain: 'dc', conductor: 'POS' },
+      { id: 'dc-neg', label: 'DC -', direction: 'out', domain: 'dc', conductor: 'NEG' },
+    ],
   },
   {
     id: 'custom-load',
@@ -136,7 +148,10 @@ export const componentRegistry: ComponentType[] = [
     type: 'load',
     defaultParams: { watts: 50, dutyCycle: 1 },
     fields: [fieldWatt, fieldCurrentA, fieldDutyCycle],
-    ports: [{ id: 'dc-in', label: 'DC In', direction: 'in', domain: 'dc', conductor: 'POS' }],
+    ports: [
+      { id: 'dc-in', label: 'DC +', direction: 'in', domain: 'dc', conductor: 'POS' },
+      { id: 'dc-neg', label: 'DC -', direction: 'out', domain: 'dc', conductor: 'NEG' },
+    ],
   },
   {
     id: 'dc-bus',
@@ -152,6 +167,22 @@ export const componentRegistry: ComponentType[] = [
       { id: 'out-2', label: 'Out 2', direction: 'out', domain: 'dc', conductor: 'POS' },
       { id: 'out-3', label: 'Out 3', direction: 'out', domain: 'dc', conductor: 'POS' },
       { id: 'out-4', label: 'Out 4', direction: 'out', domain: 'dc', conductor: 'POS' },
+    ],
+  },
+  {
+    id: 'dc-neg-bus',
+    label: 'DC NEG Bus',
+    description:
+      'Negative return distribution node for DC circuits. Use it to collect and route return paths back to battery negative.',
+    type: 'distribution',
+    defaultParams: { ratingA: 100, maxBranches: 4 },
+    fields: [fieldRatingA, fieldMaxBranches],
+    ports: [
+      { id: 'in', label: 'In', direction: 'in', domain: 'dc', conductor: 'NEG' },
+      { id: 'out-1', label: 'Out 1', direction: 'out', domain: 'dc', conductor: 'NEG' },
+      { id: 'out-2', label: 'Out 2', direction: 'out', domain: 'dc', conductor: 'NEG' },
+      { id: 'out-3', label: 'Out 3', direction: 'out', domain: 'dc', conductor: 'NEG' },
+      { id: 'out-4', label: 'Out 4', direction: 'out', domain: 'dc', conductor: 'NEG' },
     ],
   },
   {

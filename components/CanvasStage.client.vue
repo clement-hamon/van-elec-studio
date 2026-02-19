@@ -22,6 +22,37 @@
       @reset-view="resetView"
       @zoom-input="onZoomInputValue"
     />
+    <div
+      v-if="cableChoiceDialog"
+      class="cable-choice-overlay"
+      @click.self="cancelCableChoice()"
+    >
+      <div class="cable-choice-modal" role="dialog" aria-modal="true" aria-label="Choose cable type">
+        <div class="cable-choice-title">Choose Cable Type</div>
+        <div class="cable-choice-subtitle">
+          {{ cableChoiceSourceName }} → {{ cableChoiceTargetName }}
+        </div>
+        <div class="cable-choice-actions">
+          <button
+            class="cable-choice-button cable-choice-button--pos"
+            :disabled="!canChooseConductor('POS')"
+            @click="confirmCableChoice('POS')"
+          >
+            POS (+)
+          </button>
+          <button
+            class="cable-choice-button cable-choice-button--neg"
+            :disabled="!canChooseConductor('NEG')"
+            @click="confirmCableChoice('NEG')"
+          >
+            NEG (-)
+          </button>
+        </div>
+        <button class="cable-choice-cancel" @click="cancelCableChoice()">
+          Cancel
+        </button>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -31,6 +62,7 @@ import Konva from 'konva'
 import CanvasControls from '~/components/canvas/CanvasControls.vue'
 import { NODE_HEIGHT, NODE_WIDTH, type CanvasMode } from '~/components/canvas/items/constants'
 import { useCanvasItems } from '~/components/canvas/items/useCanvasItems'
+import type { CableConductorChoice } from '~/components/canvas/items/useCablePortResolver'
 import { useSchemaStore } from '~/stores/schema'
 
 const props = defineProps<{
@@ -52,12 +84,70 @@ const zoomPercent = computed(() => Math.round(zoomLevel.value * 100))
 const canZoomIn = computed(() => zoomLevel.value < maxScale - 0.001)
 const canZoomOut = computed(() => zoomLevel.value > minScale + 0.001)
 
+type CableChoiceDialog = {
+  sourceId: string
+  targetId: string
+  availableConductors: CableConductorChoice[]
+  resolve: (choice: CableConductorChoice | null) => void
+}
+
+const cableChoiceDialog = ref<CableChoiceDialog | null>(null)
+const cableChoiceSourceName = computed(() => {
+  const sourceId = cableChoiceDialog.value?.sourceId
+  if (!sourceId) return ''
+  return (
+    schemaStore.schema.components.find((component) => component.id === sourceId)?.name ?? sourceId
+  )
+})
+const cableChoiceTargetName = computed(() => {
+  const targetId = cableChoiceDialog.value?.targetId
+  if (!targetId) return ''
+  return (
+    schemaStore.schema.components.find((component) => component.id === targetId)?.name ?? targetId
+  )
+})
+
 let stage: Konva.Stage | null = null
 let layer: Konva.Layer | null = null
 let background: Konva.Rect | null = null
 let resizeObserver: ResizeObserver | null = null
 let keydownHandler: ((event: KeyboardEvent) => void) | null = null
 let items: ReturnType<typeof useCanvasItems> | null = null
+
+const cancelCableChoice = () => {
+  if (!cableChoiceDialog.value) return
+  const { resolve } = cableChoiceDialog.value
+  cableChoiceDialog.value = null
+  resolve(null)
+}
+
+const confirmCableChoice = (choice: CableConductorChoice) => {
+  if (!cableChoiceDialog.value) return
+  if (!cableChoiceDialog.value.availableConductors.includes(choice)) return
+  const { resolve } = cableChoiceDialog.value
+  cableChoiceDialog.value = null
+  resolve(choice)
+}
+
+const canChooseConductor = (choice: CableConductorChoice) => {
+  return cableChoiceDialog.value?.availableConductors.includes(choice) ?? false
+}
+
+const promptCableConductor = (payload: {
+  sourceId: string
+  targetId: string
+  availableConductors: CableConductorChoice[]
+}) => {
+  if (cableChoiceDialog.value) cancelCableChoice()
+  return new Promise<CableConductorChoice | null>((resolve) => {
+    cableChoiceDialog.value = {
+      sourceId: payload.sourceId,
+      targetId: payload.targetId,
+      availableConductors: payload.availableConductors,
+      resolve,
+    }
+  })
+}
 
 const updateBackground = () => {
   if (!stage || !background) return
@@ -135,6 +225,7 @@ const initStage = () => {
     schemaStore,
     getMode: () => props.mode,
     pendingSourceId,
+    onRequestCableConductor: promptCableConductor,
   })
 
   stage.draggable(true)
@@ -162,6 +253,10 @@ const initStage = () => {
   stage.on('click tap', (event) => {
     if (stage?.isDragging()) return
     if (event.target !== stage) return
+    if (cableChoiceDialog.value) {
+      cancelCableChoice()
+      return
+    }
     if (pendingSourceId.value) {
       pendingSourceId.value = null
     }
@@ -231,6 +326,7 @@ watch(
   () => props.mode,
   (mode) => {
     if (mode !== 'connect') {
+      cancelCableChoice()
       pendingSourceId.value = null
       items?.applySelection()
       layer?.batchDraw()
@@ -241,6 +337,7 @@ watch(
 onMounted(() => initStage())
 
 onBeforeUnmount(() => {
+  cancelCableChoice()
   resizeObserver?.disconnect()
   stage?.destroy()
   if (keydownHandler) {
@@ -250,6 +347,11 @@ onBeforeUnmount(() => {
 
 const registerKeyboardShortcuts = () => {
   keydownHandler = (event: KeyboardEvent) => {
+    if (event.key === 'Escape' && cableChoiceDialog.value) {
+      event.preventDefault()
+      cancelCableChoice()
+      return
+    }
     if (isEditableTarget(event.target)) return
     if (event.key === '+' || event.key === '=') {
       event.preventDefault()
@@ -327,3 +429,80 @@ const onZoomInputValue = (value: number) => {
   applyZoom(value)
 }
 </script>
+
+<style scoped>
+.canvas-stage-shell {
+  position: relative;
+}
+
+.cable-choice-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(23, 20, 16, 0.22);
+  z-index: 20;
+}
+
+.cable-choice-modal {
+  min-width: 240px;
+  max-width: 320px;
+  border-radius: 12px;
+  background: #fffaf2;
+  border: 1px solid #d7c9b9;
+  box-shadow: 0 12px 24px rgba(22, 18, 14, 0.18);
+  padding: 14px;
+  display: grid;
+  gap: 10px;
+}
+
+.cable-choice-title {
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: #2d2a25;
+}
+
+.cable-choice-subtitle {
+  font-size: 0.8rem;
+  color: #6a5f55;
+}
+
+.cable-choice-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.cable-choice-button {
+  height: 36px;
+  border-radius: 8px;
+  border: 1px solid #cdb9a5;
+  background: #f6efe4;
+  color: #2d2a25;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.cable-choice-button--pos {
+  border-color: #d88f82;
+}
+
+.cable-choice-button--neg {
+  border-color: #7da6d8;
+}
+
+.cable-choice-button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.cable-choice-cancel {
+  height: 34px;
+  border: 1px solid #d2c4b4;
+  border-radius: 8px;
+  background: #fff;
+  color: #4b4036;
+  cursor: pointer;
+}
+</style>

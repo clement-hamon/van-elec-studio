@@ -28,6 +28,21 @@ const CABLE_FLOW_PADDING_X = 6
 const CABLE_FLOW_PADDING_Y = 2
 const CABLE_FLOW_RADIUS = 6
 const CABLE_FLOW_OFFSET = 14
+const POSITIVE_CABLE_COLOR = '#e64141ff'
+const NEGATIVE_CABLE_COLOR = '#3a84d9'
+const IDLE_CABLE_COLOR = '#c9b8a6'
+
+const cableConductor = (cable: Cable, schemaStore: ReturnType<typeof useSchemaStore>) => {
+  const fromComponent = schemaStore.schema.components.find((component) => component.id === cable.from.nodeId)
+  const toComponent = schemaStore.schema.components.find((component) => component.id === cable.to.nodeId)
+  const fromPort = fromComponent?.ports.find((port) => port.id === cable.from.portId)
+  const toPort = toComponent?.ports.find((port) => port.id === cable.to.portId)
+  return fromPort?.conductor ?? toPort?.conductor
+}
+
+const baseCableColor = (cable: Cable, schemaStore: ReturnType<typeof useSchemaStore>) => {
+  return cableConductor(cable, schemaStore) === 'NEG' ? NEGATIVE_CABLE_COLOR : POSITIVE_CABLE_COLOR
+}
 
 const drawRoundedPath = (context, points: number[], radius: number) => {
   if (points.length < 4) return
@@ -225,8 +240,8 @@ export const useCanvasCables = ({ layer, schemaStore }: CanvasCablesOptions) => 
 
     const line = new Konva.Shape<CableShapeConfig>({
       points: [0, 0, 0, 0],
-      stroke: '#e64141ff',
-      fill: '#e64141ff',
+      stroke: baseCableColor(cable, schemaStore),
+      fill: baseCableColor(cable, schemaStore),
       strokeWidth: getCableLineStrokeWidth(cable.wire.gaugeAwg ?? 0),
       lineCap: 'round',
       lineJoin: 'round',
@@ -363,7 +378,9 @@ export const useCanvasCables = ({ layer, schemaStore }: CanvasCablesOptions) => 
   const applySelection = (selectedCableId: string | undefined) => {
     lineMap.forEach((line, cableId) => {
       const isSelected = cableId === selectedCableId
-      const stroke = isSelected ? '#2d2a25' : '#e64141ff'
+      const cable = schemaStore.schema.cables.find((item) => item.id === cableId)
+      if (!cable) return
+      const stroke = isSelected ? '#2d2a25' : baseCableColor(cable, schemaStore)
       line.stroke(stroke)
       line.fill(stroke)
       // line.strokeWidth(isSelected ? 3.5 : 2)
@@ -416,13 +433,16 @@ export const useCanvasCables = ({ layer, schemaStore }: CanvasCablesOptions) => 
       const utilization = edgeFlow?.utilization ?? 0
       const limited = edgeFlow?.limitedBy && edgeFlow.limitedBy.length > 0
       const isSelected = schemaStore.schema.selection.cableId === cableId
-      let stroke = '#e64141ff'
-      if (limited || utilization >= 1) {
-        stroke = '#d96b3a'
-      } else if (utilization >= 0.8) {
-        stroke = '#f2b46d'
-      } else if (magnitude < 0.01) {
-        stroke = '#c9b8a6'
+      const isNegativeCable = cableConductor(cable, schemaStore) === 'NEG'
+      let stroke = baseCableColor(cable, schemaStore)
+      if (!isNegativeCable) {
+        if (limited || utilization >= 1) {
+          stroke = '#d96b3a'
+        } else if (utilization >= 0.8) {
+          stroke = '#f2b46d'
+        } else if (magnitude < 0.01) {
+          stroke = IDLE_CABLE_COLOR
+        }
       }
       if (isSelected) {
         stroke = '#2d2a25'

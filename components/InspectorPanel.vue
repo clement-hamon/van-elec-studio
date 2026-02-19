@@ -55,7 +55,7 @@
           <div class="port-label">
             {{ port.label ?? port.id }} <span class="port-id">({{ port.id }})</span>
           </div>
-          <div class="port-meta">{{ port.dir }} · {{ port.domain.toUpperCase() }}</div>
+          <div class="port-meta">{{ port.dir }} · {{ port.domain.toUpperCase() }} · {{ port.conductor }}</div>
         </div>
       </div>
     </section>

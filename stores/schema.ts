@@ -2,6 +2,7 @@ import { defineStore } from 'pinia'
 import { computeCableDerived, estimateAmpacityForAwg } from '~/services/cable'
 import { computeFlow } from '~/services/flow-engine'
 import { resolveVoltageForDomain } from '~/services/flow/voltage-domain'
+import { buildPortsFromType, mergeComponentPortsWithType } from '~/src/domain/components/ports'
 import { componentRegistry } from '~/src/domain/components/registry'
 import { getHistoryDepth, loadSchema, saveSchema, undoSchema } from '~/services/storage'
 import type { FlowOutput, ScenarioInput, Port,
@@ -21,6 +22,7 @@ const makeId = (prefix: string) => `${prefix}-${Date.now()}-${Math.floor(Math.ra
 
 const defaultScenario = (): ScenarioInput => ({
   enabledNodes: {},
+  dcNegativeMode: 'warn',
   dispatchPolicy: 'priority_order',
   sourcePriority: [],
 })
@@ -35,17 +37,6 @@ const emptyDerived: CableDerived = {
   voltageDropV: 0,
 }
 
-const buildPortsFromType = (type: ComponentType | undefined): (Port & { label?: string })[] => {
-  if (!type) return []
-  return type.ports.map((port) => ({
-    id: port.id,
-    domain: port.domain,
-    conductor: port.conductor,
-    dir: port.direction,
-    label: port.label,
-  }))
-}
-
 const ensureWireAmpacity = (wire: CableWire): CableWire => {
   if (typeof wire.gaugeAwg === 'number') {
     return { ...wire, maxA: estimateAmpacityForAwg(wire.gaugeAwg) }
@@ -55,11 +46,13 @@ const ensureWireAmpacity = (wire: CableWire): CableWire => {
 
 const defaultImageScaleRatio = (typeId: string) => (typeId === 'fuse' ? 0.7 : 1)
 
-const normalizeSchema = (schema: SchemaState): SchemaState => {
+const normalizeSchema = (schema: SchemaState, registry: ComponentType[]): SchemaState => {
+  const typeById = new Map(registry.map((type) => [type.id, type]))
   return {
     ...schema,
     components: schema.components.map((component) => ({
       ...component,
+      ports: mergeComponentPortsWithType(component, typeById.get(component.typeId)),
       imageScaleRatio:
         typeof component.imageScaleRatio === 'number'
           ? component.imageScaleRatio
@@ -108,8 +101,9 @@ const buildCable = (
 
 const applyDerivedAll = (
   schema: SchemaState,
+  registry: ComponentType[],
 ): { schema: SchemaState; flow: FlowOutput | null } => {
-  const normalized = normalizeSchema(schema)
+  const normalized = normalizeSchema(schema, registry)
   const scenario = normalized.scenario ?? defaultScenario()
   let flow: FlowOutput | null = null
 
@@ -215,7 +209,7 @@ const flowDiagnosticsToIssues = (flow: FlowOutput | null): Issue[] => {
 const hydrateSchema = (registry: ComponentType[]) => {
   const saved = loadSchema()
   const base = saved ?? defaultSchema(registry)
-  return applyDerivedAll(base)
+  return applyDerivedAll(base, registry)
 }
 
 export const useSchemaStore = defineStore('schema', {

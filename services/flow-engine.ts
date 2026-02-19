@@ -26,6 +26,7 @@ import {
   normalizeDomain,
   resolveVoltageForDomain,
 } from "./flow/voltage-domain";
+import { validateDcNegativeReturn } from "./flow/dc-negative-return";
 
 import { buildAdjacency, buildSpanningTree } from "./spanning-tree";
 import { runVisitors } from "./visitors/tree-visitor";
@@ -63,7 +64,8 @@ interface FlowEdge {
 }
 
 const DEFAULT_TOTALS_DOMAIN = "dc";
-const SUPPORTED_CONDUCTORS = new Set<Conductor>(["POS", "L"]);
+const FLOW_CONDUCTORS = new Set<Conductor>(["POS", "L"]);
+const PASSIVE_CONDUCTORS = new Set<Conductor>(["NEG"]);
 
 const isEnabled = (nodeId: string, scenario: ScenarioInput) => {
   const enabled = scenario.enabledNodes?.[nodeId];
@@ -79,7 +81,10 @@ const numberParam = (params: Record<string, unknown> | undefined, key: string) =
   return typeof value === "number" && Number.isFinite(value) ? value : undefined;
 };
 
-const isSupportedConductor = (conductor: Conductor) => SUPPORTED_CONDUCTORS.has(conductor);
+const isRecognizedConductor = (conductor: Conductor) =>
+  FLOW_CONDUCTORS.has(conductor) || PASSIVE_CONDUCTORS.has(conductor);
+
+const isFlowConductor = (conductor: Conductor) => FLOW_CONDUCTORS.has(conductor);
 
 class FlowEngine {
   private readonly scenario: ScenarioInput;
@@ -170,6 +175,23 @@ class FlowEngine {
         refs: [{ nodeId }]
       });
     }
+
+    const connectedDcLoadIds = nodes
+      .filter((node) =>
+        node.type === "load" &&
+        tree.parent.has(node.id) &&
+        !fuseCheck.blockedNodes.has(node.id) &&
+        isDCDomain(node.primaryDomain)
+      )
+      .map((node) => node.id);
+    diagnostics.push(
+      ...validateDcNegativeReturn({
+        graph: this.input.graph,
+        scenario: this.scenario,
+        batteryId: battery.id,
+        connectedLoadIds: connectedDcLoadIds,
+      })
+    );
 
     Object.assign(edgesOut, edgeCurrent.edgeFlows);
 
@@ -311,7 +333,7 @@ class FlowEngine {
         continue;
       }
 
-      if (!isSupportedConductor(fromPort.conductor) || !isSupportedConductor(toPort.conductor)) {
+      if (!isRecognizedConductor(fromPort.conductor) || !isRecognizedConductor(toPort.conductor)) {
         diagnostics.push({
           severity: "warning",
           code: "EDGE_CONDUCTOR_UNSUPPORTED",
@@ -330,6 +352,8 @@ class FlowEngine {
         });
         continue;
       }
+
+      if (!isFlowConductor(fromPort.conductor)) continue;
 
       const domain = normalizeDomain(fromPort.domain);
       // Voltage is resolved once at mapping time so all downstream visitors
