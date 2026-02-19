@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import { computeCableDerived, estimateAmpacityForAwg } from '~/services/cable'
+import { computeCableDerived, estimateAmpacityForAwg, findRequiredAwgForCurrent } from '~/services/cable'
 import { computeFlow } from '~/services/flow-engine'
 import { resolveVoltageForDomain } from '~/services/flow/voltage-domain'
 import { buildPortsFromType, mergeComponentPortsWithType } from '~/src/domain/components/ports'
@@ -17,6 +17,7 @@ import type { FlowOutput, ScenarioInput, Port,
 
 const nowIso = () => new Date().toISOString()
 const SAVE_DEBOUNCE_MS = 500
+const CABLE_SIZING_DESIGN_MARGIN = 1.25
 let saveTimer: ReturnType<typeof setTimeout> | null = null
 
 const makeId = (prefix: string) => `${prefix}-${Date.now()}-${Math.floor(Math.random() * 1000)}`
@@ -25,6 +26,7 @@ const defaultScenario = (): ScenarioInput => ({
   enabledNodes: {},
   dcNegativeMode: 'warn',
   currentComputationMode: 'load_simulation',
+  autoCableGauge: false,
   dispatchPolicy: 'priority_order',
   sourcePriority: [],
 })
@@ -117,6 +119,7 @@ const applyDerivedAll = (
 ): { schema: SchemaState; flow: FlowOutput | null } => {
   const normalized = normalizeSchema(schema, registry)
   const scenario = normalizeScenario(normalized.scenario)
+  const portByKey = buildPortIndex(normalized.components)
   let flow: FlowOutput | null = null
 
   try {
@@ -128,8 +131,31 @@ const applyDerivedAll = (
     console.error('Flow engine failed to compute flow', error)
   }
 
-  const portByKey = buildPortIndex(normalized.components)
-  const cables = normalized.cables.map((cable) => buildCable(cable, flow, portByKey, scenario))
+  const shouldAutoGauge =
+    scenario.currentComputationMode === 'cable_sizing' &&
+    scenario.autoCableGauge === true &&
+    flow !== null
+
+  const cablesForDerivation = shouldAutoGauge
+    ? normalized.cables.map((cable) => {
+      const edgeFlow = flow?.edges[cable.id]
+      const sizingCurrentA = edgeFlow ? Math.abs(edgeFlow.currentA) : 0
+      // Continuous-load conductor sizing convention: 125% design current.
+      const designCurrentA = sizingCurrentA * CABLE_SIZING_DESIGN_MARGIN
+      const domain = resolveCableDomain(cable, portByKey)
+      const circuitVoltageV = resolveVoltageForDomain(domain, scenario)
+      const autoGaugeAwg = findRequiredAwgForCurrent(designCurrentA, {
+        lengthM: cable.wire.lengthM,
+        voltageV: circuitVoltageV,
+      })
+      return {
+        ...cable,
+        wire: ensureWireAmpacity({ ...cable.wire, gaugeAwg: autoGaugeAwg }),
+      }
+    })
+    : normalized.cables
+
+  const cables = cablesForDerivation.map((cable) => buildCable(cable, flow, portByKey, scenario))
 
   return {
     schema: { ...normalized, cables },
@@ -312,6 +338,12 @@ export const useSchemaStore = defineStore('schema', {
     setCurrentComputationMode(mode: CurrentComputationMode) {
       const scenario = normalizeScenario(this.schema.scenario)
       this.schema.scenario = { ...scenario, currentComputationMode: mode }
+      this.schema.updatedAt = nowIso()
+      this.refreshValidation()
+    },
+    setAutoCableGauge(enabled: boolean) {
+      const scenario = normalizeScenario(this.schema.scenario)
+      this.schema.scenario = { ...scenario, autoCableGauge: enabled }
       this.schema.updatedAt = nowIso()
       this.refreshValidation()
     },

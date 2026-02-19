@@ -69,11 +69,47 @@ export const computeCableDerived = (
 
 const awgValues = Array.from({ length: AWG_MAX - AWG_MIN + 1 }, (_, i) => AWG_MIN + i)
 
-export const findRequiredAwgForCurrent = (currentA: number) => {
+type AwgSizingOptions = {
+  lengthM?: number
+  voltageV?: number
+  maxVoltageDropRatio?: number
+  copperConductivity?: number
+}
+
+const DEFAULT_MAX_VOLTAGE_DROP_RATIO = 0.03
+const DEFAULT_COPPER_CONDUCTIVITY = 56
+
+const requiredSectionMm2ForDc = (
+  currentA: number,
+  lengthM: number,
+  voltageV: number,
+  maxVoltageDropRatio: number,
+  copperConductivity: number,
+) => {
+  if (currentA <= 0 || lengthM <= 0 || voltageV <= 0 || maxVoltageDropRatio <= 0 || copperConductivity <= 0) {
+    return 0
+  }
+  // A = (2 * I * L) / (gamma * Ua * U)
+  return (2 * currentA * lengthM) / (copperConductivity * maxVoltageDropRatio * voltageV)
+}
+
+export const findRequiredAwgForCurrent = (currentA: number, options: AwgSizingOptions = {}) => {
   const current = Math.max(0, currentA)
+  const lengthM = Math.max(0, options.lengthM ?? 0)
+  const voltageV = Math.max(0, options.voltageV ?? 0)
+  const maxVoltageDropRatio = Math.max(0, options.maxVoltageDropRatio ?? DEFAULT_MAX_VOLTAGE_DROP_RATIO)
+  const copperConductivity = Math.max(0, options.copperConductivity ?? DEFAULT_COPPER_CONDUCTIVITY)
+  const requiredSectionMm2 = requiredSectionMm2ForDc(
+    current,
+    lengthM,
+    voltageV,
+    maxVoltageDropRatio,
+    copperConductivity,
+  )
   for (let i = awgValues.length - 1; i >= 0; i -= 1) {
     const awg = awgValues[i]
-    if (estimateAmpacityForAwg(awg) >= current) return awg
+    const sectionMm2 = awgToMm2(awg)
+    if (sectionMm2 >= requiredSectionMm2) return awg
   }
   return AWG_MIN
 }

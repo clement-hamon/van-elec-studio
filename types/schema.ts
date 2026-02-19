@@ -172,6 +172,8 @@ export interface ScenarioInput {
 
   // Current calculation strategy used for cable metrics.
   currentComputationMode?: CurrentComputationMode;
+  // Auto-pick cable AWG from computed branch sizing current.
+  autoCableGauge?: boolean;
 
   // Multi-source dispatch
   dispatchPolicy?: "priority_order" | "share_proportionally";

@@ -32,6 +32,14 @@
               <option value="load_simulation">Load simulation</option>
               <option value="cable_sizing">Cable sizing</option>
             </select>
+            <label class="calculation-mode__checkbox">
+              <input
+                v-model="autoCableGauge"
+                type="checkbox"
+                :disabled="!isCableSizingMode"
+              >
+              <span>Auto cable gauge (125% sizing margin)</span>
+            </label>
           </div>
         </div>
       </div>
@@ -64,6 +72,13 @@ const currentComputationMode = computed({
   get: () => schemaStore.schema.scenario?.currentComputationMode ?? 'load_simulation',
   set: (value: 'load_simulation' | 'cable_sizing') => {
     schemaStore.setCurrentComputationMode(value)
+  },
+})
+const isCableSizingMode = computed(() => currentComputationMode.value === 'cable_sizing')
+const autoCableGauge = computed({
+  get: () => schemaStore.schema.scenario?.autoCableGauge ?? false,
+  set: (value: boolean) => {
+    schemaStore.setAutoCableGauge(value)
   },
 })
 
@@ -110,6 +125,22 @@ const onAddSelected = () => {
   font-weight: 500;
   background: #fff;
   color: #2d2a25;
+}
+
+.calculation-mode__checkbox {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.8rem;
+  color: #4a453f;
+}
+
+.calculation-mode__checkbox input {
+  accent-color: #2d2a25;
+}
+
+.calculation-mode__checkbox input:disabled + span {
+  opacity: 0.55;
 }
 
 .inspector-header {
