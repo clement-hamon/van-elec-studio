@@ -303,14 +303,6 @@ export const useSchemaStore = defineStore('schema', {
       this.schema.updatedAt = nowIso()
       this.refreshValidation()
     },
-    swapCableDirection(id: string) {
-      const cable = this.schema.cables.find((item) => item.id === id)
-      if (!cable) return
-      this.updateCable(id, {
-        from: cable.to,
-        to: cable.from,
-      })
-    },
     setSelection(payload: { componentId?: string; cableId?: string }) {
       this.schema.selection = payload
     },

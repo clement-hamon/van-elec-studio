@@ -115,16 +115,22 @@ export class FuseCheckVisitor<E extends FuseEdge> implements TreeVisitor<E> {
       sumW = 0;
     }
 
-    // Warn about unprotected wires: if the edge is connected to a battery or source and doesn't have a fuse on it or connected node, flag it as unprotected
+    // Warn about unprotected wires: if an edge touches a source/battery and the
+    // opposite endpoint is not a fuse (or the wire is too long), flag it.
     if (parentEdge) {
-      const fromNode = this.nodes.find((n) => n.id === parentEdge.from);
-      const toNode = this.nodes.find((n) => n.id === parentEdge.to);
+      const endpointA = this.nodes.find((n) => n.id === parentEdge.from);
+      const endpointB = this.nodes.find((n) => n.id === parentEdge.to);
+      const sourceEndpoint = isSourceNode(endpointA)
+        ? endpointA
+        : isSourceNode(endpointB)
+          ? endpointB
+          : undefined;
+      const oppositeEndpoint = sourceEndpoint === endpointA ? endpointB : endpointA;
 
-      const isFromSource = isSourceNode(fromNode);
-      const isToFuse = isFuse(toNode);
+      const isOppositeFuse = isFuse(oppositeEndpoint);
       const isLongWire = parentEdge.wire?.lengthM !== undefined && parentEdge.wire.lengthM > MAX_FUSE_DISTANCE_M;
 
-      if (isFromSource && (!isToFuse || isLongWire)) {
+      if (sourceEndpoint && (!isOppositeFuse || isLongWire)) {
         this.unprotectedEdges.add(parentEdge.id);
         this._diagnostics.push({
           severity: "warning",

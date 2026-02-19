@@ -4,6 +4,7 @@ import type { useSchemaStore } from '~/stores/schema'
 import type { ComponentInstance } from '~/types/schema'
 import { estimateAmpacityForAwg } from '~/services/cable'
 import { NODE_HEIGHT, NODE_SCALE, NODE_WIDTH, type CanvasMode } from './constants'
+import { useCablePortResolver } from './useCablePortResolver'
 
 type CanvasNodesOptions = {
   layer: Konva.Layer
@@ -92,6 +93,7 @@ export const useCanvasNodes = ({
   const config = useRuntimeConfig()
   const baseURL = config.app.baseURL
   const nodeMap = new Map<string, Konva.Group>()
+  const { resolvePreferredEndpoints } = useCablePortResolver()
 
   const getNodeCenter = (nodeId: string) => {
     const node = nodeMap.get(nodeId)
@@ -201,31 +203,22 @@ export const useCanvasNodes = ({
           (cable.from.nodeId === targetId && cable.to.nodeId === sourceId),
       )
 
-    const pickPortId = (component: ComponentInstance, direction: 'in' | 'out') => {
-      const candidates = component.ports.filter(
-        (port) => port.dir === direction || port.dir === 'bidirectional',
-      )
-      const fallback = candidates[0] ?? component.ports[0]
-      return fallback?.id ?? null
-    }
+    const createCable = (firstId: string, secondId: string) => {
+      if (connectionExists(firstId, secondId)) return null
+      const first = schemaStore.schema.components.find((component) => component.id === firstId)
+      const second = schemaStore.schema.components.find((component) => component.id === secondId)
+      if (!first || !second) return null
 
-    const createCable = (sourceId: string, targetId: string) => {
-      if (connectionExists(sourceId, targetId)) return null
-      const source = schemaStore.schema.components.find((component) => component.id === sourceId)
-      const target = schemaStore.schema.components.find((component) => component.id === targetId)
-      if (!source || !target) return null
-
-      const fromPortId = pickPortId(source, 'out')
-      const toPortId = pickPortId(target, 'in')
-      if (!fromPortId || !toPortId) return null
+      const endpoints = resolvePreferredEndpoints(first, second)
+      if (!endpoints) return null
 
       const newCableId = `cable-${Date.now()}`
       const gaugeAwg = 8
       schemaStore.addCable({
         id: newCableId,
-        name: `Cable ${sourceId} → ${targetId}`,
-        from: { nodeId: sourceId, portId: fromPortId },
-        to: { nodeId: targetId, portId: toPortId },
+        name: `Cable ${endpoints.from.nodeId} → ${endpoints.to.nodeId}`,
+        from: endpoints.from,
+        to: endpoints.to,
         wire: { lengthM: 2, gaugeAwg, maxA: estimateAmpacityForAwg(gaugeAwg) },
         derived: {
           ampacityA: 0,

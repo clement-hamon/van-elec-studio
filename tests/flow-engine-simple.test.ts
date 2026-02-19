@@ -200,6 +200,37 @@ describe("flow-engine", () => {
     expect(result.diagnostics.some((d: { code: string }) => d.code === "EDGE_OVERVOLTAGE_INCOMPATIBLE")).toBe(true);
   });
 
+  it("flags direct overvoltage regardless of edge endpoint order", () => {
+    const input: FlowInput = {
+      graph: {
+        nodes: [
+          {
+            id: "bat",
+            type: "battery",
+            ports: [{ id: "p+", domain: "dc", conductor: "POS", dir: "bidirectional" }],
+            params: { nominalV: 12, maxVoltageV: 14.4, maxDischargeA: 200 }
+          },
+          {
+            id: "solar",
+            type: "source",
+            ports: [{ id: "out", domain: "dc", conductor: "POS", dir: "out" }],
+            params: { availableW: 200, outputV: 18 }
+          }
+        ],
+        edges: [
+          // Same physical link as previous test, reversed edge endpoints.
+          { id: "e1", from: { nodeId: "bat", portId: "p+" }, to: { nodeId: "solar", portId: "out" } }
+        ]
+      },
+      scenario: {}
+    };
+
+    const result = computeFlow(input);
+
+    expect(result.status).toBe("failed");
+    expect(result.diagnostics.some((d: { code: string }) => d.code === "EDGE_OVERVOLTAGE_INCOMPATIBLE")).toBe(true);
+  });
+
   it("flags overvoltage through pass-through nodes on charging path", () => {
     const input: FlowInput = {
       graph: {
@@ -235,5 +266,35 @@ describe("flow-engine", () => {
 
     expect(result.status).toBe("failed");
     expect(result.diagnostics.some((d: { code: string }) => d.code === "EDGE_OVERVOLTAGE_INCOMPATIBLE")).toBe(true);
+  });
+
+  it("flags unprotected battery wire regardless of edge endpoint order", () => {
+    const input: FlowInput = {
+      graph: {
+        nodes: [
+          {
+            id: "bat",
+            type: "battery",
+            ports: [{ id: "p+", domain: "DC_12V", conductor: "POS", dir: "bidirectional" }],
+            params: { maxDischargeA: 100 }
+          },
+          {
+            id: "load",
+            type: "load",
+            ports: [{ id: "in", domain: "DC_12V", conductor: "POS", dir: "in" }],
+            params: { watts: 60 }
+          }
+        ],
+        edges: [
+          // Reversed endpoint order: load -> battery.
+          { id: "e1", from: { nodeId: "load", portId: "in" }, to: { nodeId: "bat", portId: "p+" }, wire: { lengthM: 1 } }
+        ]
+      },
+      scenario: {}
+    };
+
+    const result = computeFlow(input);
+
+    expect(result.diagnostics.some((d: { code: string }) => d.code === "UNPROTECTED_WIRE")).toBe(true);
   });
 });

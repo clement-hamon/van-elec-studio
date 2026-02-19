@@ -121,15 +121,6 @@
         <label for="gauge">Gauge (AWG)</label>
         <input id="gauge" v-model.number="cableGauge" type="number" step="1" >
       </div>
-      <div class="field">
-        <label>Direction</label>
-        <div class="derived">
-          <div>{{ cableDirectionLabel }}</div>
-          <button class="swap-button" type="button" @click="swapCableDirection">
-            Swap direction
-          </button>
-        </div>
-      </div>
       <div class="field field-readonly">
         <label>Gauge (mm²)</label>
         <div class="derived">{{ cableGaugeMm2 }} mm²</div>
@@ -207,12 +198,12 @@ const componentEnabled = computed({
   },
 })
 
-const cableDirectionLabel = computed(() => {
-  if (!selectedCable.value) return ''
-  const sourcePort = selectedCable.value.from.portId ? `:${selectedCable.value.from.portId}` : ''
-  const targetPort = selectedCable.value.to.portId ? `:${selectedCable.value.to.portId}` : ''
-  return `${selectedCable.value.from.nodeId}${sourcePort} → ${selectedCable.value.to.nodeId}${targetPort}`
-})
+// const cableDirectionLabel = computed(() => {
+//   if (!selectedCable.value) return ''
+//   const sourcePort = selectedCable.value.from.portId ? `:${selectedCable.value.from.portId}` : ''
+//   const targetPort = selectedCable.value.to.portId ? `:${selectedCable.value.to.portId}` : ''
+//   return `${selectedCable.value.from.nodeId}${sourcePort} → ${selectedCable.value.to.nodeId}${targetPort}`
+// })
 
 const componentFields = computed(() => componentType.value?.fields ?? [])
 
@@ -344,11 +335,6 @@ const cableAmpacity = computed(() => selectedCable.value?.derived.ampacityA ?? 0
 const cableVoltageDrop = computed(() =>
   selectedCable.value ? selectedCable.value.derived.voltageDropV.toFixed(2) : '0.00',
 )
-
-const swapCableDirection = () => {
-  if (!selectedCable.value) return
-  schemaStore.swapCableDirection(selectedCable.value.id)
-}
 
 const onSourcePortChange = (event: Event) => {
   if (!selectedCable.value) return

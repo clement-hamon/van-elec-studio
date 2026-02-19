@@ -1,4 +1,4 @@
-import type { Diagnostic, NodeType } from "../../types/schema";
+import type { Diagnostic, Direction, NodeType } from "../../types/schema";
 import type { GraphEdge } from "../spanning-tree";
 import type { TreeVisitor } from "./tree-visitor";
 
@@ -11,6 +11,8 @@ export interface VoltageNode {
 
 export interface VoltageEdge extends GraphEdge {
   voltageV?: number;
+  fromPortDir?: Direction;
+  toPortDir?: Direction;
 }
 
 interface VoltageProfile {
@@ -21,6 +23,7 @@ interface VoltageProfile {
 }
 
 const EPSILON = 1e-6;
+const REVERSIBLE_PORT_TYPES = new Set<NodeType>(["battery", "distribution"]);
 
 const numberParam = (params: Record<string, unknown> | undefined, key: string) => {
   const value = params?.[key];
@@ -148,33 +151,111 @@ export class VoltageCompatibilityVisitor<E extends VoltageEdge> implements TreeV
     const toNode = this.nodeById.get(edge.to);
     if (!fromNode || !toNode) return;
 
-    const fromProfile = resolveProfile(fromNode);
-    const toProfile = resolveProfile(toNode);
+    const directedPair = this.inferDirectedPair(edge, fromNode, toNode);
+    if (directedPair) {
+      this.reportViolation(edge, directedPair.sender, directedPair.receiver);
+      return;
+    }
 
-    const senderVoltageV =
-      fromProfile.outputVoltageV ??
-      fromProfile.operationalVoltageV ??
-      this.effectiveOutputVoltageByNode.get(fromNode.id) ??
-      edge.voltageV;
-
-    const receiverMaxInputV =
-      toProfile.maxInputVoltageV ??
-      toProfile.maxVoltageV;
-
-    if (
-      typeof senderVoltageV === "number" &&
-      typeof receiverMaxInputV === "number" &&
-      senderVoltageV > receiverMaxInputV + EPSILON
-    ) {
+    // If port directions are ambiguous (e.g. bidirectional↔bidirectional or
+    // in↔bidirectional), evaluate both directions and flag any potential
+    // overvoltage path.
+    const forwardViolation = this.isCandidateDirectionAllowed(
+      fromNode,
+      toNode,
+      edge.fromPortDir,
+      edge.toPortDir
+    )
+      ? this.getViolation(fromNode, toNode, edge.voltageV)
+      : null;
+    const reverseViolation = this.isCandidateDirectionAllowed(
+      toNode,
+      fromNode,
+      edge.toPortDir,
+      edge.fromPortDir
+    )
+      ? this.getViolation(toNode, fromNode, edge.voltageV)
+      : null;
+    if (forwardViolation || reverseViolation) {
+      const sender = forwardViolation ? fromNode : toNode;
+      const receiver = forwardViolation ? toNode : fromNode;
+      const selected = forwardViolation ?? reverseViolation;
+      if (!selected) return;
+      const qualifier = forwardViolation && reverseViolation ? "in either direction" : "on this connection";
       this._diagnostics.push({
         severity: "error",
         code: "EDGE_OVERVOLTAGE_INCOMPATIBLE",
         message:
-          `${fromNode.id} may deliver ${senderVoltageV.toFixed(1)}V, but ${toNode.id} accepts at most ` +
-          `${receiverMaxInputV.toFixed(1)}V.`,
-        refs: [{ edgeId: edge.id }, { nodeId: fromNode.id }, { nodeId: toNode.id }]
+          `Potential overvoltage ${qualifier}: ${sender.id} may deliver ${selected.senderVoltageV.toFixed(1)}V, ` +
+          `but ${receiver.id} accepts at most ${selected.receiverMaxInputV.toFixed(1)}V.`,
+        refs: [{ edgeId: edge.id }, { nodeId: sender.id }, { nodeId: receiver.id }]
       });
     }
+  }
+
+  private inferDirectedPair(edge: E, fromNode: VoltageNode, toNode: VoltageNode) {
+    const fromDir = edge.fromPortDir;
+    const toDir = edge.toPortDir;
+    if (!fromDir || !toDir) return null;
+
+    // Prefer explicit out→in semantics; when only one side is explicit, orient
+    // from can-send side to can-receive side.
+    if (fromDir === "out" && toDir === "in") return { sender: fromNode, receiver: toNode };
+    if (toDir === "out" && fromDir === "in") return { sender: toNode, receiver: fromNode };
+    if (fromDir === "out" && toDir === "bidirectional") return { sender: fromNode, receiver: toNode };
+    if (toDir === "out" && fromDir === "bidirectional") return { sender: toNode, receiver: fromNode };
+
+    return null;
+  }
+
+  private getViolation(sender: VoltageNode, receiver: VoltageNode, edgeVoltageV: number | undefined) {
+    const senderProfile = resolveProfile(sender);
+    const receiverProfile = resolveProfile(receiver);
+
+    const senderVoltageV =
+      senderProfile.outputVoltageV ??
+      senderProfile.operationalVoltageV ??
+      this.effectiveOutputVoltageByNode.get(sender.id) ??
+      edgeVoltageV;
+
+    const receiverMaxInputV =
+      receiverProfile.maxInputVoltageV ??
+      receiverProfile.maxVoltageV;
+
+    if (
+      typeof senderVoltageV !== "number" ||
+      typeof receiverMaxInputV !== "number" ||
+      senderVoltageV <= receiverMaxInputV + EPSILON
+    ) {
+      return null;
+    }
+
+    return { senderVoltageV, receiverMaxInputV };
+  }
+
+  private isCandidateDirectionAllowed(
+    sender: VoltageNode,
+    receiver: VoltageNode,
+    senderPortDir: Direction | undefined,
+    receiverPortDir: Direction | undefined
+  ) {
+    if (senderPortDir === "in" && !REVERSIBLE_PORT_TYPES.has(sender.type)) return false;
+    if (receiverPortDir === "out" && !REVERSIBLE_PORT_TYPES.has(receiver.type)) return false;
+    return true;
+  }
+
+  private reportViolation(edge: E, sender: VoltageNode, receiver: VoltageNode) {
+    const violation = this.getViolation(sender, receiver, edge.voltageV);
+    if (!violation) return;
+
+    this._diagnostics.push({
+      severity: "error",
+      code: "EDGE_OVERVOLTAGE_INCOMPATIBLE",
+      message:
+        `${sender.id} may deliver ${violation.senderVoltageV.toFixed(1)}V, but ${receiver.id} accepts at most ` +
+        `${violation.receiverMaxInputV.toFixed(1)}V.`,
+      refs: [{ edgeId: edge.id }, { nodeId: sender.id }, { nodeId: receiver.id }]
+    });
   }
 
   diagnostics() {

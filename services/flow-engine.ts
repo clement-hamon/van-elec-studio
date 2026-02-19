@@ -16,8 +16,9 @@ import type {
   NodeFlow,
   Port,
   ScenarioInput,
-  NodeType, nodeTypes, type Conductor 
+  NodeType, Conductor, Direction
 } from "../types/schema";
+import { nodeTypes } from "../types/schema";
 import {
   DEFAULT_DOMAIN_VOLTAGE,
   isACDomain,
@@ -52,6 +53,8 @@ interface FlowEdge {
   to: string;
   fromPortId: string;
   toPortId: string;
+  fromPortDir: Direction;
+  toPortDir: Direction;
   domain: string;
   // Resolved operating voltage for this edge domain in the active scenario.
   voltageV: number;
@@ -338,6 +341,8 @@ class FlowEngine {
         to: edge.to.nodeId,
         fromPortId: edge.from.portId,
         toPortId: edge.to.portId,
+        fromPortDir: fromPort.dir,
+        toPortDir: toPort.dir,
         domain,
         voltageV,
         wire: { maxA: edge.wire?.maxA, lengthM: edge.wire?.lengthM },
