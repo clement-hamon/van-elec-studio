@@ -9,23 +9,19 @@
         No cables yet. Connect components to add one.
       </div>
       <div v-else class="summary-list">
-        <div v-for="group in groupedByGauge" :key="group.key" class="summary-card">
-          <div class="summary-card-header">
-            <div class="summary-card-title">{{ formatCableGauge(group.gaugeAwg) }}</div>
-            <span class="summary-badge">x{{ group.count }}</span>
-          </div>
-          <div class="summary-lengths">
+        <div v-for="group in groupedByGauge" :key="group.key" class="summary-row">
+          <div class="summary-cable-stack">
             <div
-              v-for="lengthGroup in group.lengthGroups"
-              :key="lengthGroup.key"
-              class="summary-length-row"
+              v-for="polarity in cablePolarities"
+              :key="`${group.key}-${polarity.key}`"
+              class="summary-cable-icon"
+              :style="cableIconStyle(group.gaugeAwg)"
             >
-              <div class="summary-length-label">
-                {{ formatCableLength(lengthGroup.lengthM) }}
-              </div>
-              <span class="summary-badge summary-badge-soft">x{{ lengthGroup.count }}</span>
+              <img :src="polarity.icon" :alt="polarity.alt" draggable="false">
+              <span class="summary-cable-gauge">{{ formatGaugeSign(group.gaugeAwg) }}</span>
             </div>
           </div>
+          <span class="summary-row-count">x{{ group.count }}</span>
         </div>
       </div>
     </div>
@@ -34,52 +30,31 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
+import { awgToMm2 } from '~/services/cable'
 import type { Cable } from '~/types/schema'
 
 const props = defineProps<{ cables: Cable[] }>()
-
-type LengthGroup = {
-  key: string
-  lengthM?: number
-  count: number
-}
 
 type GaugeGroup = {
   key: string
   gaugeAwg?: number
   count: number
-  lengthGroups: LengthGroup[]
 }
 
 const groupedByGauge = computed<GaugeGroup[]>(() => {
-  const byGauge = new Map<
-    string,
-    { gaugeAwg?: number; count: number; lengths: Map<string, LengthGroup> }
-  >()
+  const byGauge = new Map<string, { gaugeAwg?: number; count: number }>()
 
   props.cables.forEach((cable) => {
     const gaugeAwg = normalizeNumber(cable.wire?.gaugeAwg)
-    const lengthM = normalizeNumber(cable.wire?.lengthM)
     const gaugeKey = `${gaugeAwg ?? 'na'}`
-    const lengthKey = `${lengthM ?? 'na'}`
 
     let gaugeGroup = byGauge.get(gaugeKey)
     if (!gaugeGroup) {
-      gaugeGroup = { gaugeAwg: gaugeAwg ?? undefined, count: 0, lengths: new Map() }
+      gaugeGroup = { gaugeAwg: gaugeAwg ?? undefined, count: 0 }
       byGauge.set(gaugeKey, gaugeGroup)
     }
 
     gaugeGroup.count += 1
-    const existingLength = gaugeGroup.lengths.get(lengthKey)
-    if (existingLength) {
-      existingLength.count += 1
-    } else {
-      gaugeGroup.lengths.set(lengthKey, {
-        key: `${gaugeKey}|${lengthKey}`,
-        lengthM: lengthM ?? undefined,
-        count: 1,
-      })
-    }
   })
 
   return Array.from(byGauge.entries())
@@ -87,11 +62,6 @@ const groupedByGauge = computed<GaugeGroup[]>(() => {
       key,
       gaugeAwg: group.gaugeAwg,
       count: group.count,
-      lengthGroups: Array.from(group.lengths.values()).sort((a, b) => {
-        const lengthA = a.lengthM ?? Number.POSITIVE_INFINITY
-        const lengthB = b.lengthM ?? Number.POSITIVE_INFINITY
-        return lengthA - lengthB
-      }),
     }))
     .sort((a, b) => {
       const gaugeA = a.gaugeAwg ?? Number.POSITIVE_INFINITY
@@ -105,14 +75,34 @@ const normalizeNumber = (value?: number) => {
   return value
 }
 
-const formatCableLength = (lengthM?: number) => {
-  if (typeof lengthM !== 'number' || !Number.isFinite(lengthM)) return '0.0 m'
-  return `${lengthM.toFixed(1)} m`
+const cablePolarities = [
+  { key: 'pos', icon: '/icons/pos-cable.svg', alt: 'Positive cable' },
+  { key: 'neg', icon: '/icons/neg-cable.svg', alt: 'Negative cable' },
+]
+
+const BASE_GAUGE = 8
+const BASE_ICON_HEIGHT = 16
+const MIN_ICON_HEIGHT = 12
+const MAX_ICON_HEIGHT = 24
+
+const toIconHeight = (gaugeAwg?: number) => {
+  if (typeof gaugeAwg !== 'number' || !Number.isFinite(gaugeAwg)) {
+    return BASE_ICON_HEIGHT
+  }
+  const area = awgToMm2(gaugeAwg)
+  const baseArea = awgToMm2(BASE_GAUGE)
+  const ratio = area / baseArea
+  const scaled = BASE_ICON_HEIGHT * Math.sqrt(Math.max(0.15, ratio))
+  return Math.max(MIN_ICON_HEIGHT, Math.min(MAX_ICON_HEIGHT, Math.round(scaled)))
 }
 
-const formatCableGauge = (gaugeAwg?: number) => {
-  if (typeof gaugeAwg !== 'number' || !Number.isFinite(gaugeAwg)) return 'n/a'
-  return `${Math.round(gaugeAwg)} AWG`
+const cableIconStyle = (gaugeAwg?: number) => ({
+  height: `${toIconHeight(gaugeAwg)}px`,
+})
+
+const formatGaugeSign = (gaugeAwg?: number) => {
+  if (typeof gaugeAwg !== 'number' || !Number.isFinite(gaugeAwg)) return 'AWG ?'
+  return `Ø ${Math.round(gaugeAwg)}`
 }
 </script>
 
@@ -149,63 +139,56 @@ const formatCableGauge = (gaugeAwg?: number) => {
 
 .summary-list {
   display: grid;
-  gap: 10px;
+  gap: 2px;
+  justify-items: start;
 }
 
-.summary-card {
+.summary-row {
+  position: relative;
+  width: fit-content;
+  padding: 1px 26px 1px 0;
+  margin-bottom: 8px;
+}
+
+.summary-cable-stack {
   display: grid;
-  gap: 8px;
-  padding: 10px 12px;
-  border-radius: 12px;
-  border: 1px solid rgba(45, 42, 37, 0.12);
-  background: #fffaf2;
+  gap: 0;
+  justify-items: start;
 }
 
-.summary-card-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
+.summary-cable-icon {
+  position: relative;
+  width: auto;
+  line-height: 0;
 }
 
-.summary-card-title {
-  font-size: 0.8rem;
-  font-weight: 600;
-  color: #2d2a25;
+.summary-cable-icon img {
+  display: block;
+  height: 100%;
+  width: auto;
+  object-fit: contain;
 }
 
-.summary-badge {
-  border-radius: 999px;
-  padding: 3px 8px;
-  font-size: 0.7rem;
-  font-weight: 600;
-  background: rgba(217, 107, 58, 0.15);
-  color: #6a4b3b;
+.summary-cable-gauge {
+  position: absolute;
+  left: 20px;
+  top: 40%;
+  transform: translate(-50%, -50%);
+  font-size: 0.66rem;
+  font-weight: 700;
+  color: #f6f4ef;
+  padding: 1px 5px;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
 }
 
-.summary-badge-soft {
-  background: rgba(45, 42, 37, 0.08);
+.summary-row-count {
+  position: absolute;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 0.68rem;
+  font-weight: 700;
   color: #5a554f;
-}
-
-.summary-lengths {
-  display: grid;
-  gap: 6px;
-}
-
-.summary-length-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  background: rgba(45, 42, 37, 0.05);
-  border-radius: 10px;
-  padding: 6px 10px;
-}
-
-.summary-length-label {
-  font-size: 0.85rem;
-  font-weight: 600;
-  color: #2d2a25;
-  font-variant-numeric: tabular-nums;
 }
 </style>
