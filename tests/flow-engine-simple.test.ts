@@ -359,6 +359,70 @@ describe("flow-engine", () => {
     expect(Math.abs(result.edges.e1?.currentA ?? 0)).toBeCloseTo(20);
   });
 
+  it("charges battery when a direct source is connected", () => {
+    const input: FlowInput = {
+      graph: {
+        nodes: [
+          {
+            id: "bat",
+            type: "battery",
+            ports: [{ id: "p+", domain: "DC_12V", conductor: "POS", dir: "bidirectional" }],
+            params: { maxChargeA: 100, maxDischargeA: 120, nominalV: 12 }
+          },
+          {
+            id: "src",
+            type: "source",
+            ports: [{ id: "out", domain: "DC_12V", conductor: "POS", dir: "out" }],
+            params: { maxOutA: 20 }
+          }
+        ],
+        edges: [
+          { id: "e1", from: { nodeId: "src", portId: "out" }, to: { nodeId: "bat", portId: "p+" }, wire: { maxA: 80 } }
+        ]
+      },
+      scenario: {}
+    };
+
+    const result = computeFlow(input);
+
+    expect(result.status).toBe("ok");
+    expect(result.nodes.bat?.state).toBe("charging");
+    expect(result.nodes.bat?.netA).toBeCloseTo(20);
+    expect(result.edges.e1?.currentA).toBeCloseTo(20);
+  });
+
+  it("keeps battery charging when source-battery edge endpoints are reversed", () => {
+    const input: FlowInput = {
+      graph: {
+        nodes: [
+          {
+            id: "bat",
+            type: "battery",
+            ports: [{ id: "p+", domain: "DC_12V", conductor: "POS", dir: "bidirectional" }],
+            params: { maxChargeA: 100, maxDischargeA: 120, nominalV: 12 }
+          },
+          {
+            id: "src",
+            type: "source",
+            ports: [{ id: "out", domain: "DC_12V", conductor: "POS", dir: "out" }],
+            params: { maxOutA: 20 }
+          }
+        ],
+        edges: [
+          { id: "e1", from: { nodeId: "bat", portId: "p+" }, to: { nodeId: "src", portId: "out" }, wire: { maxA: 80 } }
+        ]
+      },
+      scenario: {}
+    };
+
+    const result = computeFlow(input);
+
+    expect(result.status).toBe("ok");
+    expect(result.nodes.bat?.state).toBe("charging");
+    expect(result.nodes.bat?.netA).toBeCloseTo(20);
+    expect(result.edges.e1?.currentA).toBeCloseTo(-20);
+  });
+
   it("applies the strictest converter output cap when maxOutW and maxOutA are both defined", () => {
     const input: FlowInput = {
       graph: {

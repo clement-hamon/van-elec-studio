@@ -1,11 +1,10 @@
 import type { Diagnostic, NodeFlow, ScenarioInput, NodeType } from "../../types/schema";
 import {
-  CURRENT_LIMIT_REASONS,
-  resolveBatteryPowerCapsW,
-  resolveNodeDemandW,
-  resolveNodeSupplyCapW,
   transformSubtreeW,
 } from "../flow/current-calculation";
+import { solveDemand } from "../flow/demand-solver";
+import { reconcilePowerBalance } from "../flow/power-balance-reconciler";
+import { solveSupply } from "../flow/supply-solver";
 import type { GraphEdge, SpanningTree } from "../spanning-tree";
 import type { TreeVisitor } from "./tree-visitor";
 
@@ -27,8 +26,8 @@ export interface PowerEdge extends GraphEdge {
 
 /**
  * Role:
- * Postorder visitor that orchestrates power-balance solving using centralized
- * formulas from flow/current-calculation.
+ * Postorder visitor that orchestrates demand solving, supply solving, and
+ * battery reconciliation.
  *
  * Input:
  * Graph nodes, tree topology, battery reference, scenario settings.
@@ -61,10 +60,8 @@ export class PowerBalanceVisitor<E extends PowerEdge> implements TreeVisitor<E> 
   totalSupplyW = 0;
   hasUnserved = false;
 
-  private readonly nodeById = new Map<string, DomainNode>();
   private readonly demandByNode = new Map<string, number>();
   private readonly supplyCapByNode = new Map<string, number>();
-  private connectedDemandW = 0;
   private solved = false;
 
   constructor(
@@ -72,34 +69,13 @@ export class PowerBalanceVisitor<E extends PowerEdge> implements TreeVisitor<E> 
     private readonly battery: DomainNode,
     private readonly batteryVoltageV: number,
     private readonly scenario: ScenarioInput
-  ) {
-    for (const node of nodes) this.nodeById.set(node.id, node);
-  }
+  ) {}
 
   prepare(tree: SpanningTree<E>) {
     this.tree = tree;
   }
 
-  visit(nodeId: string, _parentId: string | null, parentEdge: E | null): void {
-    const node = this.nodes.find((n) => n.id === nodeId);
-    if (!node) return;
-
-    const nodeVoltage = parentEdge?.voltageV && parentEdge.voltageV > 0
-      ? parentEdge.voltageV
-      : this.batteryVoltageV;
-
-    if (node.type === "load") {
-      const demandW = resolveNodeDemandW(node, nodeVoltage);
-      this.demandByNode.set(node.id, demandW);
-      this.totalDemandW += demandW;
-      if (this.tree.parent.has(node.id)) this.connectedDemandW += demandW;
-      this.nodeFlows[node.id] = { demandW };
-    }
-
-    if (node.type === "source" && this.tree.parent.has(node.id)) {
-      this.supplyCapByNode.set(node.id, resolveNodeSupplyCapW(node, nodeVoltage));
-    }
-
+  visit(nodeId: string, _parentId: string | null, _parentEdge: E | null, _children: string[]): void {
     // Solve when we reach the root (last node in postorder)
     if (nodeId === this.tree.root && !this.solved) {
       this.solve();
@@ -118,120 +94,33 @@ export class PowerBalanceVisitor<E extends PowerEdge> implements TreeVisitor<E> 
    * Filled injectionsW/nodeFlows plus shortage/limit diagnostics.
    */
   private solve() {
-    const batteryVoltageV = this.batteryVoltageV;
-    const battery = this.battery;
-
-    const { maxChargeW, maxDischargeW } = resolveBatteryPowerCapsW(battery, batteryVoltageV);
-
-    const dispatchableSources = Array.from(this.supplyCapByNode.entries()).map(([sourceId, sourceCapW]) => {
-      return [sourceId, this.resolveSourceDeliverableToRootW(sourceId, sourceCapW)] as const;
+    const demand = solveDemand(this.nodes, this.tree, this.batteryVoltageV);
+    const supply = solveSupply(this.nodes, this.tree, this.batteryVoltageV);
+    const balanced = reconcilePowerBalance({
+      nodes: this.nodes,
+      battery: this.battery,
+      batteryVoltageV: this.batteryVoltageV,
+      scenario: this.scenario,
+      demandByNode: demand.demandByNode,
+      connectedDemandW: demand.connectedDemandW,
+      dispatchableSources: supply.dispatchableSources,
+      isNodeConnected: (nodeId) => this.tree.parent.has(nodeId),
     });
 
-    const totalSupplyCapW =
-      dispatchableSources.reduce((sum, [, capW]) => sum + capW, 0) + maxDischargeW;
-    const servedFactor =
-      this.connectedDemandW > 0 ? Math.min(1, totalSupplyCapW / this.connectedDemandW) : 1;
-    const servedDemandW = this.connectedDemandW * servedFactor;
+    this.totalDemandW = demand.totalDemandW;
+    this.totalSupplyW = balanced.totalSupplyW;
+    this.hasUnserved = balanced.hasUnserved;
 
-    if (servedFactor < 1) {
-      this._diagnostics.push({
-        severity: "warning",
-        code: "UNSERVED_DEMAND",
-        message: "Demand exceeds available supply; loads scaled proportionally."
-      });
-    }
+    this.demandByNode.clear();
+    demand.demandByNode.forEach((value, key) => this.demandByNode.set(key, value));
+    this.supplyCapByNode.clear();
+    supply.supplyCapByNode.forEach((value, key) => this.supplyCapByNode.set(key, value));
 
-    // Set load injections
-    for (const node of this.nodes) {
-      if (node.type !== "load") continue;
-      const demandW = this.demandByNode.get(node.id) ?? 0;
-      const servedW = this.tree.parent.has(node.id) ? demandW * servedFactor : 0;
-      // Positive injection means "this node consumes this many watts".
-      this.injectionsW.set(node.id, servedW);
-      if (servedFactor < 1 && servedW < demandW) {
-        this.nodeFlows[node.id] = {
-          ...this.nodeFlows[node.id],
-          clampedBy: [CURRENT_LIMIT_REASONS.supplyShortage],
-        };
-      }
-    }
+    this.injectionsW.clear();
+    Object.assign(this.nodeFlows, demand.nodeFlows, balanced.nodeFlows);
+    balanced.injectionsW.forEach((value, key) => this.injectionsW.set(key, value));
+    this._diagnostics.push(...balanced.diagnostics);
 
-    // Dispatch sources
-    const supplyBudgetW = servedDemandW + (servedFactor === 1 ? maxChargeW : 0);
-    const sources = [...dispatchableSources];
-    const dispatchPolicy = this.scenario.dispatchPolicy ?? "priority_order";
-    const priority = this.scenario.sourcePriority ?? [];
-
-    if (dispatchPolicy === "priority_order" && priority.length > 0) {
-      const rank = new Map<string, number>(priority.map((id: string, idx: number) => [id, idx] as [string, number]));
-      sources.sort((a, b) => (rank.get(a[0]) ?? 999999) - (rank.get(b[0]) ?? 999999));
-    }
-
-    let usedSupplyW = 0;
-    if (dispatchPolicy === "share_proportionally") {
-      const totalCap = sources.reduce((a, [, cap]) => a + cap, 0);
-      for (const [id, cap] of sources) {
-        const use = totalCap > 0 ? Math.min(cap, (cap / totalCap) * supplyBudgetW) : 0;
-        usedSupplyW += use;
-        this.nodeFlows[id] = { supplyW: use };
-        // Negative injection means "this node provides this many watts".
-        this.injectionsW.set(id, -use);
-      }
-    } else {
-      let remaining = supplyBudgetW;
-      for (const [id, cap] of sources) {
-        if (remaining <= 1e-6) {
-          this.nodeFlows[id] = { supplyW: 0 };
-          this.injectionsW.set(id, 0);
-          continue;
-        }
-        const use = Math.min(cap, remaining);
-        remaining -= use;
-        usedSupplyW += use;
-        this.nodeFlows[id] = { supplyW: use };
-        this.injectionsW.set(id, -use);
-      }
-    }
-
-    // Battery balance
-    const netFromSourcesW = usedSupplyW - servedDemandW;
-    let batteryNetA = 0;
-    const batteryFlow: NodeFlow = {};
-
-    if (netFromSourcesW >= 0) {
-      const chargeW = Math.min(netFromSourcesW, maxChargeW);
-      batteryNetA = batteryVoltageV > 0 ? chargeW / batteryVoltageV : 0;
-      if (netFromSourcesW - chargeW > 1e-6) {
-        this._diagnostics.push({
-          severity: "warning",
-          code: "EXCESS_SUPPLY",
-          message: "Supply exceeds load and battery charge limit; excess is unused."
-        });
-        batteryFlow.clampedBy = [CURRENT_LIMIT_REASONS.batteryMaxChargeA];
-      }
-    } else {
-      const dischargeW = Math.min(-netFromSourcesW, maxDischargeW);
-      batteryNetA = batteryVoltageV > 0 ? -dischargeW / batteryVoltageV : 0;
-      if (servedFactor === 1 && -netFromSourcesW - dischargeW > 1e-6) {
-        this._diagnostics.push({
-          severity: "warning",
-          code: "UNSERVED_DEMAND",
-          message: "Battery discharge limit prevents serving all demand."
-        });
-        batteryFlow.clampedBy = [CURRENT_LIMIT_REASONS.batteryMaxDischargeA];
-      }
-    }
-
-    this.nodeFlows[battery.id] = {
-      netA: batteryNetA,
-      state: batteryNetA > 1e-6 ? "charging" : batteryNetA < -1e-6 ? "discharging" : "idle",
-      ...batteryFlow
-    };
-    // Keep battery represented in the same power-sign convention.
-    this.injectionsW.set(battery.id, -batteryNetA * batteryVoltageV);
-
-    this.hasUnserved = servedFactor < 1;
-    this.totalSupplyW = usedSupplyW + Math.max(0, -batteryNetA * batteryVoltageV);
     this.computeSizingEnvelopes();
   }
 
@@ -253,22 +142,6 @@ export class PowerBalanceVisitor<E extends PowerEdge> implements TreeVisitor<E> 
 
       this.sizingDemandSubtreeW.set(nodeId, Math.max(0, upstreamDemandW));
       this.sizingSupplySubtreeW.set(nodeId, Math.max(0, upstreamSupplyW));
-    }
-  }
-
-  private resolveSourceDeliverableToRootW(sourceId: string, sourceCapW: number) {
-    let deliverableW = sourceCapW;
-    let cursor = sourceId;
-
-    while (true) {
-      const parentId = this.tree.parent.get(cursor);
-      if (parentId === undefined || parentId === null) return deliverableW;
-      const parentNode = this.nodeById.get(parentId);
-      if (!parentNode) return deliverableW;
-
-      // Propagate supply through each ancestor so converter output caps are enforced.
-      deliverableW = Math.abs(transformSubtreeW(parentNode, -deliverableW));
-      cursor = parentId;
     }
   }
 

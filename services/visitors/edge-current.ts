@@ -1,11 +1,11 @@
 import type { CurrentComputationMode, Diagnostic, EdgeFlow } from "../../types/schema";
 import {
   CURRENT_LIMIT_REASONS,
+  powerToCurrentA,
   resolveCurrentUtilization,
   resolveEdgeVoltageV,
   resolveSimulationLimitReasons,
   resolveSizingFlow,
-  powerToCurrentMagnitudeA,
 } from "../flow/current-calculation";
 import type { GraphEdge } from "../spanning-tree";
 import type { TreeVisitor } from "./tree-visitor";
@@ -85,8 +85,8 @@ export class EdgeCurrentVisitor<E extends WiredEdge> implements TreeVisitor<E> {
 
     const edgeVoltageV = resolveEdgeVoltageV(parentEdge.voltageV);
     const flowW = this.subtreeW.get(nodeId) ?? 0;
-    const demandA = powerToCurrentMagnitudeA(flowW, edgeVoltageV);
-    const signedA = this.resolveSignedCurrent(parentEdge, parentId, nodeId, demandA);
+    const flowParentToChildA = powerToCurrentA(flowW, edgeVoltageV);
+    const signedA = this.resolveSignedCurrent(parentEdge, parentId, nodeId, flowParentToChildA);
     const maxA = parentEdge.wire?.maxA;
     const limitedBy = resolveSimulationLimitReasons(signedA, maxA);
 
