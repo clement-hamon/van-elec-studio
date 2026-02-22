@@ -74,10 +74,16 @@ const normalizeNumber = (value?: number) => {
   if (typeof value !== 'number' || !Number.isFinite(value)) return null
   return value
 }
+const config = useRuntimeConfig()
+const baseURL = config.app.baseURL
+const getAssetPath = (path: string, baseURL: string) => {
+  return baseURL.endsWith('/') ? `${baseURL}${path.slice(1)}` : `${baseURL}${path}`
+}
+const getPath = (path: string) => getAssetPath(path, baseURL)
 
 const cablePolarities = [
-  { key: 'pos', icon: '/icons/pos-cable.svg', alt: 'Positive cable' },
-  { key: 'neg', icon: '/icons/neg-cable.svg', alt: 'Negative cable' },
+  { key: 'pos', icon: getPath('/icons/pos-cable.svg'), alt: 'Positive cable' },
+  { key: 'neg', icon: getPath('/icons/neg-cable.svg'), alt: 'Negative cable' },
 ]
 
 const BASE_GAUGE = 8
